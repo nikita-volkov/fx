@@ -1,8 +1,4 @@
-module Acquire
-(
-  Acquire(..),
-  with,
-)
+module Acquire.Acquire
 where
 
 import Acquire.Prelude
@@ -40,9 +36,3 @@ instance Monad Acquire where
 instance MonadIO Acquire where
   liftIO io =
     Acquire (fmap (, return ()) io)
-
-with :: Acquire resource -> (resource -> IO a) -> IO a
-with (Acquire io) handle =
-  do
-    (resource, release) <- io
-    finally (handle resource) release
