@@ -1,7 +1,7 @@
 name:
   acquire
 version:
-  0.1
+  0.2
 synopsis:
   Abstraction over management of resources
 description:
