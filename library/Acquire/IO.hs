@@ -7,6 +7,5 @@ import Acquire.Acquire
 
 acquire :: Acquire resource -> (resource -> IO a) -> IO a
 acquire (Acquire io) handle =
-  do
-    (resource, release) <- io
-    finally (handle resource) release
+  bracket io snd (handle . fst)
+
