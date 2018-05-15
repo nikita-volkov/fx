@@ -1,7 +1,7 @@
 name:
   acquire
 version:
-  0.2
+  0.2.0.1
 synopsis:
   Abstraction over management of resources
 description:
@@ -10,9 +10,9 @@ description:
 category:
   Resources
 homepage:
-  https://github.com/metrix-ai/acquire 
+  https://github.com/metrix-ai/acquire
 bug-reports:
-  https://github.com/metrix-ai/acquire/issues 
+  https://github.com/metrix-ai/acquire/issues
 author:
   Nikita Volkov <nikita.y.volkov@mail.ru>
 maintainer:
