@@ -4,10 +4,20 @@ where
 import Acquire.Prelude
 
 
+-- * IO
+-------------------------
+
+acquireAndUse :: Acquire env -> Use env err res -> IO (Either err res)
+acquireAndUse (Acquire acquireIo) (Use useRdr) =
+  bracket acquireIo snd (runExceptT . runReaderT useRdr . fst)
+
 acquire :: Acquire resource -> (resource -> IO a) -> IO a
 acquire (Acquire io) handle =
   bracket io snd (handle . fst)
 
+
+-- * Acquire
+-------------------------
 
 {-|
 Implementation of http://www.haskellforall.com/2013/06/the-resource-applicative.html
@@ -41,3 +51,20 @@ instance Monad Acquire where
 instance MonadIO Acquire where
   liftIO io =
     Acquire (fmap (, return ()) io)
+
+
+-- * Use
+-------------------------
+
+newtype Use env err res = Use (ReaderT env (ExceptT err IO) res)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+
+instance Bifunctor (Use env) where
+  first = mapErr
+  second = fmap
+
+mapEnv :: (b -> a) -> Use a err res -> Use b err res
+mapEnv fn (Use rdr) = Use (withReaderT fn rdr)
+
+mapErr :: (a -> b) -> Use env a res -> Use env b res
+mapErr fn (Use rdr) = Use (mapReaderT (withExceptT fn) rdr)

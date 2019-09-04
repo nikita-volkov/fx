@@ -7,7 +7,7 @@ where
 -- base
 -------------------------
 import Control.Applicative as Exports
-import Control.Arrow as Exports
+import Control.Arrow as Exports hiding (first, second)
 import Control.Category as Exports
 import Control.Concurrent as Exports
 import Control.Exception as Exports
@@ -15,6 +15,7 @@ import Control.Monad as Exports hiding (mapM_, sequence_, forM_, msum, mapM, seq
 import Control.Monad.IO.Class as Exports
 import Control.Monad.Fix as Exports hiding (fix)
 import Control.Monad.ST as Exports
+import Data.Bifunctor as Exports
 import Data.Bits as Exports
 import Data.Bool as Exports
 import Data.Char as Exports
@@ -67,3 +68,14 @@ import Text.ParserCombinators.ReadPrec as Exports (ReadPrec, readPrec_to_P, read
 import Text.Printf as Exports (printf, hPrintf)
 import Text.Read as Exports (Read(..), readMaybe, readEither)
 import Unsafe.Coerce as Exports
+
+-- transformers
+-------------------------
+import Control.Monad.IO.Class as Exports
+import Control.Monad.Trans.Class as Exports
+import Control.Monad.Trans.Cont as Exports hiding (shift, callCC)
+import Control.Monad.Trans.Except as Exports (ExceptT(ExceptT), Except, except, runExcept, runExceptT, mapExcept, mapExceptT, withExcept, withExceptT)
+import Control.Monad.Trans.Maybe as Exports
+import Control.Monad.Trans.Reader as Exports (Reader, runReader, mapReader, withReader, ReaderT(ReaderT), runReaderT, mapReaderT, withReaderT)
+import Control.Monad.Trans.State.Strict as Exports (State, runState, evalState, execState, mapState, withState, StateT(StateT), runStateT, evalStateT, execStateT, mapStateT, withStateT)
+import Control.Monad.Trans.Writer.Strict as Exports (Writer, runWriter, execWriter, mapWriter, WriterT(..), execWriterT, mapWriterT)
