@@ -7,6 +7,10 @@ import Acquire.Prelude
 -- * IO
 -------------------------
 
+{-|
+Execute an action, which uses a resource,
+having a resource provider.
+-}
 acquireAndUse :: Acquire env -> Use env err res -> IO (Either err res)
 acquireAndUse (Acquire acquireIo) (Use useRdr) =
   bracket acquireIo snd (runExceptT . runReaderT useRdr . fst)
@@ -20,6 +24,11 @@ acquire (Acquire io) handle =
 -------------------------
 
 {-|
+Resource provider.
+Abstracts over resource acquisition and releasing.
+
+Composes well, allowing you to merge multiple providers into one.
+
 Implementation of http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
 newtype Acquire resource =
@@ -56,6 +65,9 @@ instance MonadIO Acquire where
 -- * Use
 -------------------------
 
+{-|
+Resource handler, which has a notion of pure errors.
+-}
 newtype Use env err res = Use (ReaderT env (ExceptT err IO) res)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
