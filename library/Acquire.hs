@@ -71,11 +71,20 @@ instance Bifunctor (Use env) where
   first = mapErr
   second = fmap
 
+{-|
+Map the environment of a resource handler.
+-}
 mapEnv :: (b -> a) -> Use a err res -> Use b err res
 mapEnv fn (Use rdr) = Use (withReaderT fn rdr)
 
+{-|
+Map the error of a resource handler.
+-}
 mapErr :: (a -> b) -> Use env a res -> Use env b res
 mapErr fn (Use rdr) = Use (mapReaderT (withExceptT fn) rdr)
 
+{-|
+Map both the environment and the error of a resource handler.
+-}
 mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use envB errB res
 mapEnvAndErr envProj errProj (Use rdr) = Use (withReaderT envProj (mapReaderT (withExceptT errProj) rdr))
