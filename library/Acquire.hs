@@ -69,5 +69,5 @@ mapEnv fn (Use rdr) = Use (withReaderT fn rdr)
 mapErr :: (a -> b) -> Use env a res -> Use env b res
 mapErr fn (Use rdr) = Use (mapReaderT (withExceptT fn) rdr)
 
-zoom :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use envB errB res
-zoom envProj errProj (Use rdr) = Use (withReaderT envProj (mapReaderT (withExceptT errProj) rdr))
+mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use envB errB res
+mapEnvAndErr envProj errProj (Use rdr) = Use (withReaderT envProj (mapReaderT (withExceptT errProj) rdr))
