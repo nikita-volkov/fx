@@ -65,7 +65,7 @@ instance MonadIO Acquire where
 Resource handler, which has a notion of pure errors.
 -}
 newtype Use env err res = Use (ReaderT env (ExceptT err IO) res)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadIO)
 
 instance Bifunctor (Use env) where
   first = mapErr
