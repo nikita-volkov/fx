@@ -15,10 +15,6 @@ acquireAndUse :: Acquire env -> Use env err res -> IO (Either err res)
 acquireAndUse (Acquire acquireIo) (Use useRdr) =
   bracket acquireIo snd (runExceptT . runReaderT useRdr . fst)
 
-acquire :: Acquire resource -> (resource -> IO a) -> IO a
-acquire (Acquire io) handle =
-  bracket io snd (handle . fst)
-
 
 -- * Acquire
 -------------------------
