@@ -42,8 +42,7 @@ library
   default-language:
     Haskell2010
   exposed-modules:
-    Acquire.Acquire
-    Acquire.IO
+    Acquire
   other-modules:
     Acquire.Prelude
   build-depends:
