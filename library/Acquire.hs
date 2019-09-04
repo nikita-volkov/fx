@@ -27,18 +27,18 @@ Composes well, allowing you to merge multiple providers into one.
 
 Implementation of http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
-newtype Acquire resource =
-  Acquire (IO (resource, IO ()))
+newtype Acquire env =
+  Acquire (IO (env, IO ()))
 
 instance Functor Acquire where
   fmap f (Acquire io) =
     Acquire $ do
-      (resource, release) <- io
-      return (f resource, release)
+      (env, release) <- io
+      return (f env, release)
 
 instance Applicative Acquire where
-  pure resource =
-    Acquire (pure (resource, pure ()))
+  pure env =
+    Acquire (pure (env, pure ()))
   Acquire io1 <*> Acquire io2 =
     Acquire $ do
       (f, release1) <- io1
