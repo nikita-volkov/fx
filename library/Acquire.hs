@@ -49,9 +49,9 @@ instance Monad Acquire where
   return = pure
   (>>=) (Acquire io1) k2 =
     Acquire $ do
-      (resource1, release1) <- io1
-      (resource2, release2) <- case k2 resource1 of Acquire io2 -> onException io2 release1
-      return (resource2, release2 >> release1)
+      (env1, release1) <- io1
+      (env2, release2) <- case k2 env1 of Acquire io2 -> onException io2 release1
+      return (env2, release2 >> release1)
 
 instance MonadIO Acquire where
   liftIO io =
