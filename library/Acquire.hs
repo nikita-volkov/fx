@@ -91,3 +91,20 @@ Map both the environment and the error of a resource handler.
 -}
 mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use envB errB res
 mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withExceptT errProj))
+
+{-|
+Map from error to result, leaving the error void.
+-}
+avoidErr :: (err -> res) -> Use env err res -> Use env Void res
+avoidErr errProj = mapImpl $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
+
+{-|
+Map error monadically.
+-}
+handleErr :: (a -> Use env b res) -> Use env a res -> Use env b res
+handleErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
+  resEither <- runExceptT (runReaderT aImpl env)
+  case resEither of
+    Left a -> case lifter a of
+      Use bImpl -> runExceptT (runReaderT bImpl env)
+    Right res -> return (Right res)

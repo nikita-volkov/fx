@@ -43,6 +43,7 @@ import Data.Traversable as Exports
 import Data.Tuple as Exports
 import Data.Unique as Exports
 import Data.Version as Exports
+import Data.Void as Exports
 import Data.Word as Exports
 import Debug.Trace as Exports
 import Foreign.ForeignPtr as Exports
@@ -74,7 +75,7 @@ import Unsafe.Coerce as Exports
 import Control.Monad.IO.Class as Exports
 import Control.Monad.Trans.Class as Exports
 import Control.Monad.Trans.Cont as Exports hiding (shift, callCC)
-import Control.Monad.Trans.Except as Exports (ExceptT(ExceptT), Except, except, runExcept, runExceptT, mapExcept, mapExceptT, withExcept, withExceptT)
+import Control.Monad.Trans.Except as Exports (ExceptT(ExceptT), Except, except, runExcept, runExceptT, mapExcept, mapExceptT, withExcept, withExceptT, catchE, throwE)
 import Control.Monad.Trans.Maybe as Exports
 import Control.Monad.Trans.Reader as Exports (Reader, runReader, mapReader, withReader, ReaderT(ReaderT), runReaderT, mapReaderT, withReaderT)
 import Control.Monad.Trans.State.Strict as Exports (State, runState, evalState, execState, mapState, withState, StateT(StateT), runStateT, evalStateT, execStateT, mapStateT, withStateT)
