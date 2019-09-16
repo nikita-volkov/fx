@@ -101,6 +101,15 @@ mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use env
 mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withExceptT errProj))
 
 {-|
+Expose the error in result,
+producing a use, which is compatible with any error type.
+
+This function is particularly helpful, when you need to map into error of type `Void`.
+-}
+exposeErr :: Use env err res -> Use env anyErr (Either err res)
+exposeErr = mapImpl $ mapReaderT $ mapExceptT $ fmap $ Right
+
+{-|
 Map from error to result, leaving the error be anything.
 
 This function is particularly helpful, when you need to map into error of type `Void`.
@@ -148,7 +157,7 @@ instance Contravariant Terminate where
 {-|
 Lift a use, which produces no result or error.
 
-Functions like `absorbErr` and `bindErr`
+Functions like `exposeErr`, `absorbErr` and `bindErr`
 will help you map to the `Void` error type.
 -}
 use :: Use env Void () -> Terminate env
