@@ -93,9 +93,11 @@ mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use env
 mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withExceptT errProj))
 
 {-|
-Map from error to result, leaving the error void.
+Map from error to result, leaving the error be anything.
+
+This function is particularly helpful, when you need to map into error of type `Void`.
 -}
-absorbErr :: (err -> res) -> Use env err res -> Use env Void res
+absorbErr :: (err -> res) -> Use env err res -> Use env anyErr res
 absorbErr errProj = mapImpl $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
 
 {-|
