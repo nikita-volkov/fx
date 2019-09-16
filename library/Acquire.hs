@@ -95,14 +95,14 @@ mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withEx
 {-|
 Map from error to result, leaving the error void.
 -}
-avoidErr :: (err -> res) -> Use env err res -> Use env Void res
-avoidErr errProj = mapImpl $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
+absorbErr :: (err -> res) -> Use env err res -> Use env Void res
+absorbErr errProj = mapImpl $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
 
 {-|
 Map error monadically.
 -}
-handleErr :: (a -> Use env b res) -> Use env a res -> Use env b res
-handleErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
+bindErr :: (a -> Use env b res) -> Use env a res -> Use env b res
+bindErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
   resEither <- runExceptT (runReaderT aImpl env)
   case resEither of
     Left a -> case lifter a of
