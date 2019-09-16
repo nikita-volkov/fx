@@ -11,20 +11,20 @@ import Acquire.Prelude
 Having a resource provider, execute an action,
 which uses the resource and produces either an error or result.
 -}
-acquireAndUse :: Acquire env -> Use env err res -> IO (Either err res)
-acquireAndUse (Acquire acquireIo) (Use useRdr) =
-  bracket acquireIo snd (runExceptT . runReaderT useRdr . fst)
+providerAndAccessor :: Provider env -> Accessor env err res -> IO (Either err res)
+providerAndAccessor (Provider providerIo) (Accessor accessorRdr) =
+  bracket providerIo snd (runExceptT . runReaderT accessorRdr . fst)
 
 {-|
 Having a resource provider, execute an action,
 which uses the resource and encapsulates result and error handling,
 -}
-acquireAndTerminate :: Acquire env -> Terminate env -> IO ()
-acquireAndTerminate (Acquire acquireIo) (Terminate terminateRdr) =
-  bracket acquireIo snd (runReaderT terminateRdr . fst)
+providerAndProgram :: Provider env -> Program env -> IO ()
+providerAndProgram (Provider providerIo) (Program programRdr) =
+  bracket providerIo snd (runReaderT programRdr . fst)
 
 
--- * Acquire
+-- * Provider
 -------------------------
 
 {-|
@@ -35,78 +35,78 @@ Composes well, allowing you to merge multiple providers into one.
 
 Implementation of http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
-newtype Acquire env =
-  Acquire (IO (env, IO ()))
+newtype Provider env =
+  Provider (IO (env, IO ()))
 
-instance Functor Acquire where
-  fmap f (Acquire io) =
-    Acquire $ do
+instance Functor Provider where
+  fmap f (Provider io) =
+    Provider $ do
       (env, release) <- io
       return (f env, release)
 
-instance Applicative Acquire where
+instance Applicative Provider where
   pure env =
-    Acquire (pure (env, pure ()))
-  Acquire io1 <*> Acquire io2 =
-    Acquire $ do
+    Provider (pure (env, pure ()))
+  Provider io1 <*> Provider io2 =
+    Provider $ do
       (f, release1) <- io1
       (x, release2) <- onException io2 release1
       return (f x, release2 >> release1)
 
-instance Monad Acquire where
+instance Monad Provider where
   return = pure
-  (>>=) (Acquire io1) k2 =
-    Acquire $ do
+  (>>=) (Provider io1) k2 =
+    Provider $ do
       (env1, release1) <- io1
-      (env2, release2) <- case k2 env1 of Acquire io2 -> onException io2 release1
+      (env2, release2) <- case k2 env1 of Provider io2 -> onException io2 release1
       return (env2, release2 >> release1)
 
-instance MonadIO Acquire where
+instance MonadIO Provider where
   liftIO io =
-    Acquire (fmap (, return ()) io)
+    Provider (fmap (, return ()) io)
 
 
--- * Use
+-- * Accessor
 -------------------------
 
 {-|
 Resource handler, which has a notion of pure errors.
 -}
-newtype Use env err res = Use (ReaderT env (ExceptT err IO) res)
+newtype Accessor env err res = Accessor (ReaderT env (ExceptT err IO) res)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadIO, MonadError err)
 
-instance Bifunctor (Use env) where
+instance Bifunctor (Accessor env) where
   first = mapErr
   second = fmap
 
-mapImpl :: (ReaderT envA (ExceptT errA IO) resA -> ReaderT envB (ExceptT errB IO) resB) -> Use envA errA resA -> Use envB errB resB
-mapImpl mapper (Use impl) = Use (mapper impl)
+mapImpl :: (ReaderT envA (ExceptT errA IO) resA -> ReaderT envB (ExceptT errB IO) resB) -> Accessor envA errA resA -> Accessor envB errB resB
+mapImpl mapper (Accessor impl) = Accessor (mapper impl)
 
 {-|
 Map the environment of a resource handler.
 -}
-mapEnv :: (b -> a) -> Use a err res -> Use b err res
+mapEnv :: (b -> a) -> Accessor a err res -> Accessor b err res
 mapEnv fn = mapImpl (withReaderT fn)
 
 {-|
 Map the error of a resource handler.
 -}
-mapErr :: (a -> b) -> Use env a res -> Use env b res
+mapErr :: (a -> b) -> Accessor env a res -> Accessor env b res
 mapErr fn = mapImpl (mapReaderT (withExceptT fn))
 
 {-|
 Map both the environment and the error of a resource handler.
 -}
-mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Use envA errA res -> Use envB errB res
+mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Accessor envA errA res -> Accessor envB errB res
 mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withExceptT errProj))
 
 {-|
 Expose the error in result,
-producing a use, which is compatible with any error type.
+producing an accessor, which is compatible with any error type.
 
 This function is particularly helpful, when you need to map into error of type `Void`.
 -}
-exposeErr :: Use env err res -> Use env anyErr (Either err res)
+exposeErr :: Accessor env err res -> Accessor env anyErr (Either err res)
 exposeErr = mapImpl $ mapReaderT $ mapExceptT $ fmap $ Right
 
 {-|
@@ -114,52 +114,52 @@ Map from error to result, leaving the error be anything.
 
 This function is particularly helpful, when you need to map into error of type `Void`.
 -}
-absorbErr :: (err -> res) -> Use env err res -> Use env anyErr res
+absorbErr :: (err -> res) -> Accessor env err res -> Accessor env anyErr res
 absorbErr errProj = mapImpl $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
 
 {-|
 Map error monadically.
 -}
-bindErr :: (a -> Use env b res) -> Use env a res -> Use env b res
-bindErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
+bindErr :: (a -> Accessor env b res) -> Accessor env a res -> Accessor env b res
+bindErr lifter (Accessor aImpl) = Accessor $ ReaderT $ \ env -> ExceptT $ do
   resEither <- runExceptT (runReaderT aImpl env)
   case resEither of
     Left a -> case lifter a of
-      Use bImpl -> runExceptT (runReaderT bImpl env)
+      Accessor bImpl -> runExceptT (runReaderT bImpl env)
     Right res -> return (Right res)
 
 {-|
-Lift a terminating action into a use, which produces no result and
+Lift a terminating action into an accessor, which produces no result and
 is compatible with any error type.
 -}
-terminate :: Terminate env -> Use env err ()
-terminate (Terminate impl) = Use $ mapReaderT lift impl
+program :: Program env -> Accessor env err ()
+program (Program impl) = Accessor $ mapReaderT lift impl
 
 
--- * Terminate
+-- * Program
 -------------------------
 
 {-|
 Fully encapsulated action on an environment producing no results or errors.
 IOW, it is forced to handle errors internally.
 -}
-newtype Terminate env = Terminate (ReaderT env IO ())
+newtype Program env = Program (ReaderT env IO ())
 
-instance Semigroup (Terminate env) where
-  (<>) (Terminate a) (Terminate b) = Terminate (a *> b)
+instance Semigroup (Program env) where
+  (<>) (Program a) (Program b) = Program (a *> b)
 
-instance Monoid (Terminate env) where
-  mempty = Terminate (pure ())
+instance Monoid (Program env) where
+  mempty = Program (pure ())
   mappend = (<>)
 
-instance Contravariant Terminate where
-  contramap envProj (Terminate impl) = Terminate (withReaderT envProj impl)
+instance Contravariant Program where
+  contramap envProj (Program impl) = Program (withReaderT envProj impl)
 
 {-|
-Lift a use, which produces no result or error.
+Lift an accessor, which produces no result or error.
 
 Functions like `exposeErr`, `absorbErr` and `bindErr`
 will help you map to the `Void` error type.
 -}
-use :: Use env Void () -> Terminate env
-use (Use useImpl) = Terminate $ mapReaderT (fmap (const ()) . runExceptT) useImpl
+accessor :: Accessor env Void () -> Program env
+accessor (Accessor accessorImpl) = Program $ mapReaderT (fmap (const ()) . runExceptT) accessorImpl
