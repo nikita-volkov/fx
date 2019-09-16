@@ -19,11 +19,9 @@ acquireAndUse (Acquire acquireIo) (Use useRdr) =
 Execute an action, which uses a resource,
 having a resource provider and handles all results internally.
 -}
-acquireAndTerminate :: Acquire env -> Use env Void () -> IO ()
-acquireAndTerminate acquire use =
-  fmap
-    (const ())
-    (acquireAndUse acquire use)
+acquireAndTerminate :: Acquire env -> Terminate env -> IO ()
+acquireAndTerminate (Acquire acquireIo) (Terminate terminateRdr) =
+  bracket acquireIo snd (runReaderT terminateRdr . fst)
 
 
 -- * Acquire
@@ -120,3 +118,31 @@ bindErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
     Left a -> case lifter a of
       Use bImpl -> runExceptT (runReaderT bImpl env)
     Right res -> return (Right res)
+
+
+-- * Terminate
+-------------------------
+
+{-|
+Fully encapsulated action on an environment producing no results or errors.
+-}
+newtype Terminate env = Terminate (ReaderT env IO ())
+
+instance Semigroup (Terminate env) where
+  (<>) (Terminate a) (Terminate b) = Terminate (a *> b)
+
+instance Monoid (Terminate env) where
+  mempty = Terminate (pure ())
+  mappend = (<>)
+
+instance Contravariant Terminate where
+  contramap envProj (Terminate impl) = Terminate (withReaderT envProj impl)
+
+{-|
+Lift a use, which produces no result or error.
+
+Functions like `absorbErr` and `bindErr`
+will help you map to the `Void` error type.
+-}
+use :: Use env Void () -> Terminate env
+use (Use useImpl) = Terminate $ mapReaderT (fmap (const ()) . runExceptT) useImpl
