@@ -8,16 +8,16 @@ import Acquire.Prelude
 -------------------------
 
 {-|
-Execute an action, which uses a resource,
-having a resource provider.
+Having a resource provider, execute an action,
+which uses the resource and produces either an error or result.
 -}
 acquireAndUse :: Acquire env -> Use env err res -> IO (Either err res)
 acquireAndUse (Acquire acquireIo) (Use useRdr) =
   bracket acquireIo snd (runExceptT . runReaderT useRdr . fst)
 
 {-|
-Execute an action, which uses a resource,
-having a resource provider and handles all results internally.
+Having a resource provider, execute an action,
+which uses the resource and encapsulates result and error handling,
 -}
 acquireAndTerminate :: Acquire env -> Terminate env -> IO ()
 acquireAndTerminate (Acquire acquireIo) (Terminate terminateRdr) =
