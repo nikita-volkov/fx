@@ -141,6 +141,7 @@ terminate (Terminate impl) = Use $ mapReaderT lift impl
 
 {-|
 Fully encapsulated action on an environment producing no results or errors.
+IOW, it is forced to handle errors internally.
 -}
 newtype Terminate env = Terminate (ReaderT env IO ())
 
