@@ -119,6 +119,13 @@ bindErr lifter (Use aImpl) = Use $ ReaderT $ \ env -> ExceptT $ do
       Use bImpl -> runExceptT (runReaderT bImpl env)
     Right res -> return (Right res)
 
+{-|
+Lift a terminating action into a use, which produces no result and
+is compatible with any error type.
+-}
+terminate :: Terminate env -> Use env err ()
+terminate (Terminate impl) = Use $ mapReaderT lift impl
+
 
 -- * Terminate
 -------------------------
