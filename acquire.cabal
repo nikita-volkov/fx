@@ -5,8 +5,8 @@ version:
 synopsis:
   Abstraction over management of resources
 description:
-  An implementation of the abstraction suggested in
-  <http://www.haskellforall.com/2013/06/the-resource-applicative.html a blog-post by Gabriel Gonzalez>.
+  Set of abstractions which focus on different aspects of resource-
+  and error-handling in the context of effectful applications.
 category:
   Resources
 homepage:
