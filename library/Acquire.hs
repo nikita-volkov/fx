@@ -8,16 +8,16 @@ import Acquire.Prelude
 -------------------------
 
 {-|
-Having a resource provider, execute an action,
-which uses the resource and produces either an error or result.
+Having an environment provider, execute an action,
+which uses the environment and produces either an error or result.
 -}
 providerAndAccessor :: Provider env -> Accessor env err res -> IO (Either err res)
 providerAndAccessor (Provider providerIo) (Accessor accessorRdr) =
   bracket providerIo snd (runExceptT . runReaderT accessorRdr . fst)
 
 {-|
-Having a resource provider, execute an action,
-which uses the resource and encapsulates result and error handling,
+Having an environment provider, execute an action,
+which uses the environment and encapsulates result and error handling,
 -}
 providerAndProgram :: Provider env -> Program env -> IO ()
 providerAndProgram (Provider providerIo) (Program programRdr) =
@@ -28,7 +28,7 @@ providerAndProgram (Provider providerIo) (Program programRdr) =
 -------------------------
 
 {-|
-Resource provider.
+Environment provider.
 Abstracts over resource acquisition and releasing.
 
 Composes well, allowing you to merge multiple providers into one.
@@ -70,7 +70,7 @@ instance MonadIO Provider where
 -------------------------
 
 {-|
-Resource handler, which has a notion of pure errors.
+Environment handler, which has a notion of pure errors.
 -}
 newtype Accessor env err res = Accessor (ReaderT env (ExceptT err IO) res)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadIO, MonadError err)
@@ -83,19 +83,19 @@ mapImpl :: (ReaderT envA (ExceptT errA IO) resA -> ReaderT envB (ExceptT errB IO
 mapImpl mapper (Accessor impl) = Accessor (mapper impl)
 
 {-|
-Map the environment of a resource handler.
+Map the environment of an accessor.
 -}
 mapEnv :: (b -> a) -> Accessor a err res -> Accessor b err res
 mapEnv fn = mapImpl (withReaderT fn)
 
 {-|
-Map the error of a resource handler.
+Map the error of an accessor.
 -}
 mapErr :: (a -> b) -> Accessor env a res -> Accessor env b res
 mapErr fn = mapImpl (mapReaderT (withExceptT fn))
 
 {-|
-Map both the environment and the error of a resource handler.
+Map both the environment and the error of an accessor.
 -}
 mapEnvAndErr :: (envB -> envA) -> (errA -> errB) -> Accessor envA errA res -> Accessor envB errB res
 mapEnvAndErr envProj errProj = mapImpl (withReaderT envProj . mapReaderT (withExceptT errProj))
@@ -140,7 +140,7 @@ program (Program impl) = Accessor $ mapReaderT lift impl
 -------------------------
 
 {-|
-Fully encapsulated action on an environment producing no results or errors.
+Accessor on an environment with errors and result handlers fully encapsulated.
 IOW, it is forced to handle errors internally.
 -}
 newtype Program env = Program (ReaderT env IO ())
