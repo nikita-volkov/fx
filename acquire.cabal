@@ -44,7 +44,10 @@ library
   exposed-modules:
     Acquire
   other-modules:
+    Acquire.Accessor
     Acquire.Prelude
+    Acquire.Program
+    Acquire.Provider
   build-depends:
     base >=4.9 && <5,
     mtl >=2.2 && <3,
