@@ -27,6 +27,11 @@ instance Monad Provider where
       (env2, release2) <- case k2 env1 of Provider io2 -> onException io2 release1
       return (env2, release2 >> release1)
 
+{-|
+Create a resource provider from actions that don't fail.
+You can turn your exception-throwing actions into these
+by means of the `Uio` API.
+-}
 acquireAndRelease :: Uio env -> (env -> Uio ()) -> Provider env
 acquireAndRelease (Uio acquireIo) releaseUio = Provider $ do
   env <- acquireIo

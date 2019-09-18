@@ -19,9 +19,17 @@ mapImp fn (Uio imp) = Uio (fn imp)
 io :: (SomeException -> Uio res) -> IO res -> Uio res
 io handler = Uio . handle ((\ (Uio io) -> io) . handler)
 
+{-|
+Turn IO action into a non-failing action.
+It is your responsibility to ensure that it does not throw exceptions.
+-}
 exceptionlessIo :: IO res -> Uio res
 exceptionlessIo = Uio
 
+{-|
+Turn a failing action into a non-failing one,
+by providing an error-handler.
+-}
 eio :: (err -> Uio res) -> Eio err res -> Uio res
 eio handler (Eio (ExceptT io)) = Uio $ do
   a <- io
@@ -29,3 +37,11 @@ eio handler (Eio (ExceptT io)) = Uio $ do
     Right res -> return res
     Left err -> case handler err of
       Uio handlerIo -> handlerIo
+
+{-|
+Having an environment provider, execute an action,
+which uses the environment and encapsulates result and error handling,
+-}
+providerAndProgram :: Provider env -> Program env -> Uio ()
+providerAndProgram (Provider providerIo) (Program programRdr) =
+  Uio (bracket providerIo snd (runReaderT programRdr . fst))

@@ -24,6 +24,9 @@ instance MonadFail (Eio String) where
 mapImp :: (ExceptT err1 IO res1 -> ExceptT err2 IO res2) -> Eio err1 res1 -> Eio err2 res2
 mapImp fn (Eio imp) = Eio (fn imp)
 
+{-|
+Turn an exception-throwing IO into an action with explicit errors.
+-}
 io :: IO res -> Eio SomeException res
 io = Eio . ExceptT . try
 
@@ -35,3 +38,11 @@ retry times eio = asum1 (eio :| replicate (pred (fromIntegral times)) eio)
 
 bindErr :: (a -> Eio b res) -> Eio a res -> Eio b res
 bindErr = error "TODO"
+
+{-|
+Having an environment provider, execute an action,
+which uses the environment and produces either an error or result.
+-}
+providerAndAccessor :: Provider env -> Accessor env err res -> Eio err res
+providerAndAccessor (Provider providerIo) (Accessor accessorRdr) =
+  Eio (ExceptT (bracket providerIo snd (runExceptT . runReaderT accessorRdr . fst)))

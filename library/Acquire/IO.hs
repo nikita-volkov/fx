@@ -5,6 +5,12 @@ import Acquire.Prelude
 import Acquire.Types
 
 
+{-|
+Execute a non-failing action in IO.
+-}
+uio :: Uio res -> IO res
+uio (Uio io) = io
+
 eio :: Eio Void res -> IO res
 eio (Eio (ExceptT io)) = fmap (either absurd id) io
 
