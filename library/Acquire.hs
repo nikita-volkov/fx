@@ -6,11 +6,10 @@ module Acquire
   Uio,
   Uio.exceptionlessIo,
   Uio.eio,
-  Uio.providerAndProgram,
+  Uio.program,
   -- * Eio
   Eio,
   Eio.io,
-  Eio.providerAndAccessor,
   -- * Provider
   Provider,
   Provider.acquireAndRelease,
@@ -19,7 +18,6 @@ module Acquire
   Accessor.mapEnv,
   Accessor.mapErr,
   Accessor.mapEnvAndErr,
-  Accessor.program,
   -- * Program
   Program,
   Program.accessor,
