@@ -3,6 +3,7 @@ module Acquire
   -- * Uio
   Uio,
   Uio.exceptionlessIo,
+  Uio.eio,
   Uio.program,
   UioLifting(..),
   -- * Eio
