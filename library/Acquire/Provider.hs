@@ -5,11 +5,11 @@ import Acquire.Prelude
 
 {-|
 Environment provider.
-Abstracts over resource acquisition and releasing.
+Encompasses resource acquisition, releasing and handling of all related errors.
 
 Composes well, allowing you to merge multiple providers into one.
 
-Implementation of http://www.haskellforall.com/2013/06/the-resource-applicative.html
+Builds up on some ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
 newtype Provider env =
   Provider (IO (env, IO ()))
