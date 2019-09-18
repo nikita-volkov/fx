@@ -22,8 +22,6 @@ instance EioLifting Void Uio where
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 
-io :: (SomeException -> Uio res) -> IO res -> Uio res
-io handler = Uio . handle ((\ (Uio io) -> io) . handler)
 
 {-|
 Turn IO action into a non-failing action.
@@ -31,6 +29,13 @@ It is your responsibility to ensure that it does not throw exceptions.
 -}
 exceptionlessIo :: IO res -> Uio res
 exceptionlessIo = Uio
+
+{-|
+Turn a failing action into a non-failing one,
+by providing an exception-handler.
+-}
+handledIo :: (SomeException -> Uio res) -> IO res -> Uio res
+handledIo handler = Uio . handle ((\ (Uio io) -> io) . handler)
 
 {-|
 Turn a failing action into a non-failing one,
