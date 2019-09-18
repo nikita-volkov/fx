@@ -16,6 +16,12 @@ instance Bifunctor (Accessor env) where
   first = mapErr
   second = fmap
 
+instance UioLifting (Accessor env err) where
+  liftUio (Uio io) = Accessor (liftIO io)
+
+instance EioLifting err (Accessor env err) where
+  liftEio (Eio impl) = Accessor (lift impl)
+
 mapImpl :: (ReaderT envA (ExceptT errA IO) resA -> ReaderT envB (ExceptT errB IO) resB) -> Accessor envA errA resA -> Accessor envB errB resB
 mapImpl mapper (Accessor impl) = Accessor (mapper impl)
 

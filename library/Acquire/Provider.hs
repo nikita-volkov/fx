@@ -27,6 +27,12 @@ instance Monad Provider where
       (env2, release2) <- case k2 env1 of Provider io2 -> onException io2 release1
       return (env2, release2 >> release1)
 
+instance UioLifting Provider where
+  liftUio (Uio io) = Provider (fmap (\ a -> (a, return ())) io)
+
+instance EioLifting Void Provider where
+  liftEio (Eio (ExceptT io)) = Provider (fmap (either absurd (\ a -> (a, return ()))) io)
+
 {-|
 Create a resource provider from actions that don't fail.
 You can turn your exception-throwing actions into these

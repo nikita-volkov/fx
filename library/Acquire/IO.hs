@@ -5,14 +5,20 @@ import Acquire.Prelude
 import Acquire.Types
 
 
+instance UioLifting IO where
+  liftUio = uio
+
+instance EioLifting SomeException IO where
+  liftEio = eio
+
 {-|
 Execute a non-failing action in IO.
 -}
 uio :: Uio res -> IO res
 uio (Uio io) = io
 
-eio :: Eio Void res -> IO res
-eio (Eio (ExceptT io)) = fmap (either absurd id) io
+eio :: Exception err => Eio err res -> IO res
+eio (Eio (ExceptT io)) = io >>= either throwIO return
 
 {-|
 Having an environment provider, execute an action,

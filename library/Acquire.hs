@@ -1,15 +1,14 @@
 module Acquire
 (
-  -- * IO
-  IO.uio,
   -- * Uio
   Uio,
   Uio.exceptionlessIo,
-  Uio.eio,
   Uio.program,
+  UioLifting(..),
   -- * Eio
   Eio,
   Eio.io,
+  EioLifting(..),
   -- * Provider
   Provider,
   Provider.acquireAndRelease,

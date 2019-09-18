@@ -13,6 +13,12 @@ deriving instance Bind Uio
 deriving instance Semigroup res => Semigroup (Uio res)
 deriving instance Monoid res => Monoid (Uio res)
 
+instance UioLifting Uio where
+  liftUio = id
+
+instance EioLifting Void Uio where
+  liftEio = eio absurd
+
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 

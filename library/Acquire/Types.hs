@@ -34,3 +34,15 @@ newtype Program env = Program (ReaderT env IO ())
 Environment handler, which has a notion of pure errors.
 -}
 newtype Accessor env err res = Accessor (ReaderT env (ExceptT err IO) res)
+
+{-|
+Support for lifting of unexceptional IO.
+-}
+class UioLifting m where
+  liftUio :: Uio a -> m a
+
+{-|
+Support for lifting of IO with explicit exceptions.
+-}
+class EioLifting err m | m -> err where
+  liftEio :: Eio err a -> m a

@@ -24,6 +24,12 @@ instance MonadFail (Eio String) where
 instance MonadIO (Eio SomeException) where
   liftIO = io
 
+instance UioLifting (Eio err) where
+  liftUio (Uio io) = exceptionlessIo io
+
+instance EioLifting err (Eio err) where
+  liftEio = id
+
 mapImp :: (ExceptT err1 IO res1 -> ExceptT err2 IO res2) -> Eio err1 res1 -> Eio err2 res2
 mapImp fn (Eio imp) = Eio (fn imp)
 
