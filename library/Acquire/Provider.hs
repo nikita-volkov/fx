@@ -1,6 +1,8 @@
 module Acquire.Provider where
 
 import Acquire.Prelude
+import Acquire.Eio (Eio)
+import qualified Acquire.Eio as Eio
 
 
 {-|
@@ -11,8 +13,7 @@ Composes well, allowing you to merge multiple providers into one.
 
 Builds up on some ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
-newtype Provider env =
-  Provider (IO (env, IO ()))
+newtype Provider env = Provider (IO (env, IO ()))
 
 instance Functor Provider where
   fmap f (Provider io) =
@@ -37,6 +38,5 @@ instance Monad Provider where
       (env2, release2) <- case k2 env1 of Provider io2 -> onException io2 release1
       return (env2, release2 >> release1)
 
-instance MonadIO Provider where
-  liftIO io =
-    Provider (fmap (, return ()) io)
+acquireAndRelease :: Eio Void env -> (env -> Eio Void ()) -> Provider env
+acquireAndRelease = error "TODO"
