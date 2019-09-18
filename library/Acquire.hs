@@ -20,7 +20,7 @@ module Acquire
   Accessor.mapEnvAndErr,
   -- * Program
   Program,
-  Program.accessor,
+  Program.handledAccessor,
 )
 where
 

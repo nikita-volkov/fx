@@ -17,8 +17,8 @@ instance Contravariant Program where
 {-|
 Lift an accessor, which produces no result or error.
 -}
-accessor :: (err -> Uio ()) -> Accessor env err () -> Program env
-accessor handler (Accessor accessorImpl) =
+handledAccessor :: (err -> Uio ()) -> Accessor env err () -> Program env
+handledAccessor handler (Accessor accessorImpl) =
   Program $ flip mapReaderT accessorImpl $ \ (ExceptT io) -> do
     a <- io
     case a of
