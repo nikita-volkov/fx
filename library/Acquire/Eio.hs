@@ -14,8 +14,10 @@ deriving instance Apply (Eio err)
 deriving instance Bind (Eio err)
 deriving instance Semigroup err => Alt (Eio err)
 deriving instance Monoid err => Plus (Eio err)
+
 instance Bifunctor Eio where
   bimap lf rf = mapImp (mapExceptT (fmap (bimap lf rf)))
+
 instance MonadFail (Eio String) where
   fail = Eio . throwE
 
