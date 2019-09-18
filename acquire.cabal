@@ -50,6 +50,7 @@ library
     Acquire.Prelude
     Acquire.Program
     Acquire.Provider
+    Acquire.Types
     Acquire.Uio
   build-depends:
     base >=4.9 && <5,

@@ -1,13 +1,16 @@
 module Acquire.Accessor where
 
 import Acquire.Prelude
+import Acquire.Types
 
 
-{-|
-Environment handler, which has a notion of pure errors.
--}
-newtype Accessor env err res = Accessor (ReaderT env (ExceptT err IO) res)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadIO, MonadError err)
+deriving instance Functor (Accessor env err)
+deriving instance Applicative (Accessor env err)
+deriving instance Monoid err => Alternative (Accessor env err)
+deriving instance Monad (Accessor env err)
+deriving instance Monoid err => MonadPlus (Accessor env err)
+deriving instance MonadIO (Accessor env err)
+deriving instance MonadError err (Accessor env err)
 
 instance Bifunctor (Accessor env) where
   first = mapErr
@@ -61,3 +64,10 @@ bindErr lifter (Accessor aImpl) = Accessor $ ReaderT $ \ env -> ExceptT $ do
     Left a -> case lifter a of
       Accessor bImpl -> runExceptT (runReaderT bImpl env)
     Right res -> return (Right res)
+
+{-|
+Lift a terminating action into an accessor, which produces no result and
+is compatible with any error type.
+-}
+program :: Program env -> Accessor env err ()
+program (Program impl) = Accessor $ mapReaderT lift impl

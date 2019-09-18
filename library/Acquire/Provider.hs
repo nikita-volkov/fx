@@ -1,19 +1,8 @@
 module Acquire.Provider where
 
 import Acquire.Prelude
-import Acquire.Uio (Uio(..))
-import qualified Acquire.Uio as Uio
+import Acquire.Types
 
-
-{-|
-Environment provider.
-Encompasses resource acquisition, releasing and handling of all related errors.
-
-Composes well, allowing you to merge multiple providers into one.
-
-Builds up on some ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
--}
-newtype Provider env = Provider (IO (env, IO ()))
 
 instance Functor Provider where
   fmap f (Provider io) =

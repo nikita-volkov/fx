@@ -1,15 +1,8 @@
 module Acquire.Uio where
 
 import Acquire.Prelude
-import Acquire.Eio (Eio(..))
-import qualified Acquire.Eio as Eio
+import Acquire.Types
 
-
-{-|
-Unexceptional IO,
-i.e., IO which only throws exceptions in case of bugs.
--}
-newtype Uio res = Uio (IO res)
 
 deriving instance Functor Uio
 deriving instance Applicative Uio

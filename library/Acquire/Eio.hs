@@ -1,12 +1,8 @@
 module Acquire.Eio where
 
 import Acquire.Prelude
+import Acquire.Types
 
-
-{-|
-IO with explicit exceptions.
--}
-newtype Eio err res = Eio (ExceptT err IO res)
 
 deriving instance Functor (Eio err)
 deriving instance Applicative (Eio err)

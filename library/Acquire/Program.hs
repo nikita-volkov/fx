@@ -1,13 +1,8 @@
 module Acquire.Program where
 
 import Acquire.Prelude
+import Acquire.Types
 
-
-{-|
-Accessor on an environment with errors and result handlers fully encapsulated.
-IOW, it is forced to handle errors internally.
--}
-newtype Program env = Program (ReaderT env IO ())
 
 instance Semigroup (Program env) where
   (<>) (Program a) (Program b) = Program (a *> b)
@@ -18,3 +13,12 @@ instance Monoid (Program env) where
 
 instance Contravariant Program where
   contramap envProj (Program impl) = Program (withReaderT envProj impl)
+
+{-|
+Lift an accessor, which produces no result or error.
+
+Functions like `exposeErr`, `absorbErr` and `bindErr`
+will help you map to the `Void` error type.
+-}
+accessor :: Accessor env Void () -> Program env
+accessor (Accessor accessorImpl) = Program $ mapReaderT (fmap (const ()) . runExceptT) accessorImpl
