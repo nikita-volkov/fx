@@ -19,9 +19,6 @@ module Acquire
   Accessor.mapEnv,
   Accessor.mapErr,
   Accessor.mapEnvAndErr,
-  Accessor.exposeErr,
-  Accessor.absorbErr,
-  Accessor.bindErr,
   Accessor.program,
   -- * Program
   Program,

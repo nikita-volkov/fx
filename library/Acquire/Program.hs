@@ -16,9 +16,12 @@ instance Contravariant Program where
 
 {-|
 Lift an accessor, which produces no result or error.
-
-Functions like `exposeErr`, `absorbErr` and `bindErr`
-will help you map to the `Void` error type.
 -}
-accessor :: Accessor env Void () -> Program env
-accessor (Accessor accessorImpl) = Program $ mapReaderT (fmap (const ()) . runExceptT) accessorImpl
+accessor :: (err -> Uio ()) -> Accessor env err () -> Program env
+accessor handler (Accessor accessorImpl) =
+  Program $ flip mapReaderT accessorImpl $ \ (ExceptT io) -> do
+    a <- io
+    case a of
+      Right () -> return ()
+      Left err -> case handler err of
+        Uio handlerIo -> handlerIo
