@@ -45,6 +45,7 @@ library
     Acquire
   other-modules:
     Acquire.Accessor
+    Acquire.Eio
     Acquire.Prelude
     Acquire.Program
     Acquire.Provider
