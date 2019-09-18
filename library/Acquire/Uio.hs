@@ -23,11 +23,16 @@ deriving instance Monoid res => Monoid (Uio res)
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 
-io :: IO res -> Uio (Either SomeException res)
-io = Uio . try
+io :: (SomeException -> Uio res) -> IO res -> Uio res
+io handler = Uio . handle ((\ (Uio io) -> io) . handler)
 
 exceptionlessIo :: IO res -> Uio res
 exceptionlessIo = Uio
 
-eio :: Eio err res -> Uio (Either err res)
-eio (Eio (ExceptT io)) = Uio io
+eio :: (err -> Uio res) -> Eio err res -> Uio res
+eio handler (Eio (ExceptT io)) = Uio $ do
+  a <- io
+  case a of
+    Right res -> return res
+    Left err -> case handler err of
+      Uio handlerIo -> handlerIo
