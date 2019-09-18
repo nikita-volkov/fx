@@ -54,8 +54,16 @@ retry times = mapImp $ mapExceptT $ \ io -> let
       else return (Left err)
   in io >>= loop times
 
+{-|
+Handle error in another failing action.
+-}
 bindErr :: (a -> Eio b res) -> Eio a res -> Eio b res
-bindErr = error "TODO"
+bindErr handler = mapImp $ mapExceptT $ \ io -> do
+  a <- io
+  case a of
+    Right res -> return (Right res)
+    Left err -> case handler err of
+      Eio (ExceptT handlerIo) -> handlerIo
 
 orElse :: Eio err res -> Eio err res -> Eio err res
 orElse (Eio (ExceptT io2)) (Eio (ExceptT io1)) = Eio $ ExceptT $ do
