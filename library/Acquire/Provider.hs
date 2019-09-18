@@ -1,8 +1,8 @@
 module Acquire.Provider where
 
 import Acquire.Prelude
-import Acquire.Eio (Eio)
-import qualified Acquire.Eio as Eio
+import Acquire.Uio (Uio(..))
+import qualified Acquire.Uio as Uio
 
 
 {-|
@@ -38,5 +38,9 @@ instance Monad Provider where
       (env2, release2) <- case k2 env1 of Provider io2 -> onException io2 release1
       return (env2, release2 >> release1)
 
-acquireAndRelease :: Eio Void env -> (env -> Eio Void ()) -> Provider env
-acquireAndRelease = error "TODO"
+acquireAndRelease :: Uio env -> (env -> Uio ()) -> Provider env
+acquireAndRelease (Uio acquireIo) releaseUio = Provider $ do
+  env <- acquireIo
+  let
+    Uio releaseIo = releaseUio env
+    in return (env, releaseIo)
