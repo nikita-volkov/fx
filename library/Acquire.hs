@@ -4,11 +4,12 @@ module Acquire
   Uio,
   Uio.exceptionlessIo,
   Uio.handledEio,
-  Uio.program,
+  Uio.providerAndProgram,
   UioLifting(..),
   -- * Eio
   Eio,
   Eio.io,
+  Eio.providerAndAccessor,
   EioLifting(..),
   -- * Provider
   Provider,
