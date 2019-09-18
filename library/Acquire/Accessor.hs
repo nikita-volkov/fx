@@ -9,7 +9,6 @@ deriving instance Applicative (Accessor env err)
 deriving instance Monoid err => Alternative (Accessor env err)
 deriving instance Monad (Accessor env err)
 deriving instance Monoid err => MonadPlus (Accessor env err)
-deriving instance MonadIO (Accessor env err)
 deriving instance MonadError err (Accessor env err)
 
 instance Bifunctor (Accessor env) where
@@ -21,6 +20,9 @@ instance UioLifting (Accessor env err) where
 
 instance EioLifting err (Accessor env err) where
   eio (Eio impl) = Accessor (lift impl)
+
+instance MonadIO (Accessor env SomeException) where
+  liftIO io = Accessor (lift (ExceptT (try io)))
 
 mapImpl :: (ReaderT envA (ExceptT errA IO) resA -> ReaderT envB (ExceptT errB IO) resB) -> Accessor envA errA resA -> Accessor envB errB resB
 mapImpl mapper (Accessor impl) = Accessor (mapper impl)
