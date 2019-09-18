@@ -39,10 +39,10 @@ newtype Accessor env err res = Accessor (ReaderT env (ExceptT err IO) res)
 Support for lifting of unexceptional IO.
 -}
 class UioLifting m where
-  liftUio :: Uio a -> m a
+  uio :: Uio a -> m a
 
 {-|
 Support for lifting of IO with explicit exceptions.
 -}
 class EioLifting err m | m -> err where
-  liftEio :: Eio err a -> m a
+  eio :: Eio err a -> m a

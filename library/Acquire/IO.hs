@@ -6,19 +6,10 @@ import Acquire.Types
 
 
 instance UioLifting IO where
-  liftUio = uio
+  uio (Uio io) = io
 
 instance EioLifting SomeException IO where
-  liftEio = eio
-
-{-|
-Execute a non-failing action in IO.
--}
-uio :: Uio res -> IO res
-uio (Uio io) = io
-
-eio :: Exception err => Eio err res -> IO res
-eio (Eio (ExceptT io)) = io >>= either throwIO return
+  eio (Eio (ExceptT io)) = io >>= either throwIO return
 
 {-|
 Having an environment provider, execute an action,

@@ -28,10 +28,10 @@ instance Monad Provider where
       return (env2, release2 >> release1)
 
 instance UioLifting Provider where
-  liftUio (Uio io) = Provider (fmap (\ a -> (a, return ())) io)
+  uio (Uio io) = Provider (fmap (\ a -> (a, return ())) io)
 
 instance EioLifting Void Provider where
-  liftEio (Eio (ExceptT io)) = Provider (fmap (either absurd (\ a -> (a, return ()))) io)
+  eio (Eio (ExceptT io)) = Provider (fmap (either absurd (\ a -> (a, return ()))) io)
 
 {-|
 Create a resource provider from actions that don't fail.
