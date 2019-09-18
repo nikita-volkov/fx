@@ -42,8 +42,17 @@ io = Eio . ExceptT . try
 exceptionlessIo :: IO res -> Eio err res
 exceptionlessIo = Eio . lift
 
-retry :: Word -> Eio [err] res -> Eio [err] res
-retry times eio = asum1 (eio :| replicate (pred (fromIntegral times)) eio)
+{-|
+Retry an action the specified amount of times.
+-}
+retry :: Word -> Eio err res -> Eio err res
+retry times = mapImp $ mapExceptT $ \ io -> let
+  loop n = \ case
+    Right res -> return (Right res)
+    Left err -> if n > 0
+      then io >>= loop (pred n)
+      else return (Left err)
+  in io >>= loop times
 
 bindErr :: (a -> Eio b res) -> Eio a res -> Eio b res
 bindErr = error "TODO"
