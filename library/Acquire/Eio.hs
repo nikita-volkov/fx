@@ -48,6 +48,13 @@ retry times eio = asum1 (eio :| replicate (pred (fromIntegral times)) eio)
 bindErr :: (a -> Eio b res) -> Eio a res -> Eio b res
 bindErr = error "TODO"
 
+orElse :: Eio err res -> Eio err res -> Eio err res
+orElse (Eio (ExceptT io2)) (Eio (ExceptT io1)) = Eio $ ExceptT $ do
+  a <- io1
+  case a of
+    Right res -> return (Right res)
+    Left err -> io2
+
 {-|
 Having an environment provider, execute an action,
 which uses the environment and produces either an error or result.
