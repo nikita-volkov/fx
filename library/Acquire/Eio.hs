@@ -21,6 +21,9 @@ instance Bifunctor Eio where
 instance MonadFail (Eio String) where
   fail = Eio . throwE
 
+instance MonadIO (Eio SomeException) where
+  liftIO = io
+
 mapImp :: (ExceptT err1 IO res1 -> ExceptT err2 IO res2) -> Eio err1 res1 -> Eio err2 res2
 mapImp fn (Eio imp) = Eio (fn imp)
 
