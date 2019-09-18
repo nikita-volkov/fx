@@ -31,3 +31,9 @@ io = Eio . ExceptT . try
 
 exceptionlessIo :: IO res -> Eio err res
 exceptionlessIo = Eio . lift
+
+retry :: Word -> Eio [err] res -> Eio [err] res
+retry times eio = asum1 (eio :| replicate (pred (fromIntegral times)) eio)
+
+bindErr :: (a -> Eio b res) -> Eio a res -> Eio b res
+bindErr = error "TODO"
