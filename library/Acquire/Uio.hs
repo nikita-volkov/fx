@@ -17,7 +17,7 @@ instance UioLifting Uio where
   liftUio = id
 
 instance EioLifting Void Uio where
-  liftEio = eio absurd
+  liftEio = handledEio absurd
 
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
@@ -36,8 +36,8 @@ exceptionlessIo = Uio
 Turn a failing action into a non-failing one,
 by providing an error-handler.
 -}
-eio :: (err -> Uio res) -> Eio err res -> Uio res
-eio handler (Eio (ExceptT io)) = Uio $ do
+handledEio :: (err -> Uio res) -> Eio err res -> Uio res
+handledEio handler (Eio (ExceptT io)) = Uio $ do
   a <- io
   case a of
     Right res -> return res
