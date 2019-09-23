@@ -9,7 +9,6 @@ module Fx
   UioLifting(..),
   -- * Eio
   Eio,
-  Eio.io,
   Eio.providerAndAccessor,
   EioLifting(..),
   -- * Provider
@@ -23,6 +22,9 @@ module Fx
   -- * Process
   Process,
   Process.handledAccessor,
+  -- * Io
+  IoLifting,
+  io,
 )
 where
 
@@ -34,3 +36,10 @@ import qualified Fx.IO as IO
 import qualified Fx.Provider as Provider
 import qualified Fx.Process as Process
 import qualified Fx.Uio as Uio
+
+
+{-|
+Synonym to `liftIO`, conforming to naming conventions of this library.
+-}
+io :: IoLifting m => IO a -> m a
+io = liftIO

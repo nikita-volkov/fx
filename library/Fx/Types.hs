@@ -46,3 +46,8 @@ Support for lifting of IO with explicit exceptions.
 -}
 class EioLifting err m | m -> err where
   eio :: Eio err a -> m a
+
+{-|
+Synonym to `MonadIO`, conforming to naming conventions of this library.
+-}
+type IoLifting = MonadIO
