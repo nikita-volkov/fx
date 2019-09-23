@@ -22,10 +22,11 @@ instance EioLifting Void Uio where
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 
-
 {-|
 Turn IO action into a non-failing action.
 It is your responsibility to ensure that it does not throw exceptions.
+
+For this reason an instance of MonadIO is not provided.
 -}
 exceptionlessIo :: IO res -> Uio res
 exceptionlessIo = Uio
