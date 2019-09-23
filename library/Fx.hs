@@ -10,6 +10,7 @@ module Fx
   -- * Eio
   Eio,
   Eio.providerAndAccessor,
+  Eio.bindErr,
   EioLifting(..),
   -- * Provider
   Provider,
