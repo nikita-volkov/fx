@@ -79,3 +79,12 @@ is compatible with any error type.
 -}
 process :: Process env -> Accessor env err ()
 process (Process impl) = Accessor $ mapReaderT lift impl
+
+{-|
+Lift an env-using function into accessor.
+
+This is the way you define accessors.
+-}
+use :: (env -> Eio err res) -> Accessor env err res
+use proj = Accessor $ ReaderT $ \ env -> case proj env of
+  Eio exceptT -> exceptT

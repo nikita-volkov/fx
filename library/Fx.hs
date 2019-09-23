@@ -16,6 +16,7 @@ module Fx
   Provider.acquireAndRelease,
   -- * Accessor
   Accessor,
+  Accessor.use,
   Accessor.mapEnv,
   Accessor.mapErr,
   Accessor.mapEnvAndErr,
