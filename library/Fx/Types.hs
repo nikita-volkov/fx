@@ -1,6 +1,6 @@
-module Acquire.Types where
+module Fx.Types where
 
-import Acquire.Prelude
+import Fx.Prelude
 
 
 {-|

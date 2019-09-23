@@ -1,5 +1,5 @@
 name:
-  acquire
+  fx
 version:
   0.3.1
 synopsis:
@@ -10,9 +10,9 @@ description:
 category:
   Resources
 homepage:
-  https://github.com/metrix-ai/acquire
+  https://github.com/metrix-ai/fx
 bug-reports:
-  https://github.com/metrix-ai/acquire/issues
+  https://github.com/metrix-ai/fx/issues
 author:
   Nikita Volkov <nikita.y.volkov@mail.ru>
 maintainer:
@@ -32,7 +32,7 @@ source-repository head
   type:
     git
   location:
-    git://github.com/metrix-ai/acquire.git
+    git://github.com/metrix-ai/fx.git
 
 library
   hs-source-dirs:
@@ -42,16 +42,16 @@ library
   default-language:
     Haskell2010
   exposed-modules:
-    Acquire
+    Fx
   other-modules:
-    Acquire.Accessor
-    Acquire.Eio
-    Acquire.IO
-    Acquire.Prelude
-    Acquire.Process
-    Acquire.Provider
-    Acquire.Types
-    Acquire.Uio
+    Fx.Accessor
+    Fx.Eio
+    Fx.IO
+    Fx.Prelude
+    Fx.Process
+    Fx.Provider
+    Fx.Types
+    Fx.Uio
   build-depends:
     base >=4.9 && <5,
     mtl >=2.2 && <3,

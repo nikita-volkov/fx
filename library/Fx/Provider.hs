@@ -1,7 +1,7 @@
-module Acquire.Provider where
+module Fx.Provider where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 instance Functor Provider where

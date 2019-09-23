@@ -1,7 +1,7 @@
-module Acquire.Accessor where
+module Fx.Accessor where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 deriving instance Functor (Accessor env err)

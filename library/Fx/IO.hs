@@ -1,8 +1,8 @@
-module Acquire.IO
+module Fx.IO
 where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 instance UioLifting IO where

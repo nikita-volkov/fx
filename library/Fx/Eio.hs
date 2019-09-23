@@ -1,7 +1,7 @@
-module Acquire.Eio where
+module Fx.Eio where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 deriving instance Functor (Eio err)

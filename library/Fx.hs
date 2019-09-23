@@ -1,4 +1,4 @@
-module Acquire
+module Fx
 (
   -- * Uio
   Uio,
@@ -26,11 +26,11 @@ module Acquire
 )
 where
 
-import Acquire.Prelude
-import Acquire.Types
-import qualified Acquire.Accessor as Accessor
-import qualified Acquire.Eio as Eio
-import qualified Acquire.IO as IO
-import qualified Acquire.Provider as Provider
-import qualified Acquire.Process as Process
-import qualified Acquire.Uio as Uio
+import Fx.Prelude
+import Fx.Types
+import qualified Fx.Accessor as Accessor
+import qualified Fx.Eio as Eio
+import qualified Fx.IO as IO
+import qualified Fx.Provider as Provider
+import qualified Fx.Process as Process
+import qualified Fx.Uio as Uio

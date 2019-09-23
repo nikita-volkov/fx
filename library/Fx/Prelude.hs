@@ -1,4 +1,4 @@
-module Acquire.Prelude
+module Fx.Prelude
 ( 
   module Exports,
 )

@@ -1,7 +1,7 @@
-module Acquire.Uio where
+module Fx.Uio where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 deriving instance Functor Uio

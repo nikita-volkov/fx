@@ -1,7 +1,7 @@
-module Acquire.Process where
+module Fx.Process where
 
-import Acquire.Prelude
-import Acquire.Types
+import Fx.Prelude
+import Fx.Types
 
 
 instance Semigroup (Process env) where
