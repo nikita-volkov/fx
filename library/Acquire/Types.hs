@@ -28,7 +28,7 @@ newtype Provider env = Provider (IO (env, IO ()))
 Accessor on an environment with errors and result handlers fully encapsulated.
 IOW, it is forced to handle errors internally.
 -}
-newtype Program env = Program (ReaderT env IO ())
+newtype Process env = Process (ReaderT env IO ())
 
 {-|
 Environment handler, which has a notion of pure errors.

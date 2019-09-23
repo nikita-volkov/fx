@@ -5,7 +5,7 @@ module Acquire
   Uio.exceptionlessIo,
   Uio.handledIo,
   Uio.handledEio,
-  Uio.providerAndProgram,
+  Uio.providerAndProcess,
   UioLifting(..),
   -- * Eio
   Eio,
@@ -20,9 +20,9 @@ module Acquire
   Accessor.mapEnv,
   Accessor.mapErr,
   Accessor.mapEnvAndErr,
-  -- * Program
-  Program,
-  Program.handledAccessor,
+  -- * Process
+  Process,
+  Process.handledAccessor,
 )
 where
 
@@ -32,5 +32,5 @@ import qualified Acquire.Accessor as Accessor
 import qualified Acquire.Eio as Eio
 import qualified Acquire.IO as IO
 import qualified Acquire.Provider as Provider
-import qualified Acquire.Program as Program
+import qualified Acquire.Process as Process
 import qualified Acquire.Uio as Uio

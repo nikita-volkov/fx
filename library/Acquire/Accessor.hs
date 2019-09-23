@@ -77,5 +77,5 @@ bindErr lifter (Accessor aImpl) = Accessor $ ReaderT $ \ env -> ExceptT $ do
 Lift a terminating action into an accessor, which produces no result and
 is compatible with any error type.
 -}
-program :: Program env -> Accessor env err ()
-program (Program impl) = Accessor $ mapReaderT lift impl
+process :: Process env -> Accessor env err ()
+process (Process impl) = Accessor $ mapReaderT lift impl

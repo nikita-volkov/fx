@@ -53,6 +53,6 @@ handledEio handler (Eio (ExceptT io)) = Uio $ do
 Having an environment provider, execute an action,
 which uses the environment and encapsulates result and error handling,
 -}
-providerAndProgram :: Provider env -> Program env -> Uio ()
-providerAndProgram (Provider providerIo) (Program programRdr) =
-  Uio (bracket providerIo snd (runReaderT programRdr . fst))
+providerAndProcess :: Provider env -> Process env -> Uio ()
+providerAndProcess (Provider providerIo) (Process processRdr) =
+  Uio (bracket providerIo snd (runReaderT processRdr . fst))

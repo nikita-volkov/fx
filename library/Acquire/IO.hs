@@ -23,6 +23,6 @@ providerAndAccessor (Provider providerIo) (Accessor accessorRdr) =
 Having an environment provider, execute an action,
 which uses the environment and encapsulates result and error handling,
 -}
-providerAndProgram :: Provider env -> Program env -> IO ()
-providerAndProgram (Provider providerIo) (Program programRdr) =
-  bracket providerIo snd (runReaderT programRdr . fst)
+providerAndProcess :: Provider env -> Process env -> IO ()
+providerAndProcess (Provider providerIo) (Process processRdr) =
+  bracket providerIo snd (runReaderT processRdr . fst)
