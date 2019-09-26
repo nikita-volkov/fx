@@ -19,6 +19,9 @@ instance UioLifting Uio where
 instance EioLifting Void Uio where
   eio = handledEio absurd
 
+instance EioLifting err (ExceptT err Uio) where
+  eio (Eio (ExceptT io)) = ExceptT (Uio io)
+
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 
