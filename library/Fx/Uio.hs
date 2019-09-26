@@ -22,6 +22,9 @@ instance EioLifting Void Uio where
 instance EioLifting err (ExceptT err Uio) where
   eio (Eio (ExceptT io)) = ExceptT (Uio io)
 
+instance MonadIO (ExceptT SomeException Uio) where
+  liftIO = ExceptT . Uio . try
+
 mapImp :: (IO res1 -> IO res2) -> Uio res1 -> Uio res2
 mapImp fn (Uio imp) = Uio (fn imp)
 
