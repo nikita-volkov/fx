@@ -11,6 +11,9 @@ instance UioLifting IO where
 instance EioLifting SomeException IO where
   eio (Eio (ExceptT io)) = io >>= either throwIO return
 
+instance EioLifting err (ExceptT err IO) where
+  eio (Eio (ExceptT io)) = ExceptT io
+
 {-|
 Having an environment provider, execute an action,
 which uses the environment and produces either an error or result.
