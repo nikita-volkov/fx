@@ -26,14 +26,7 @@ library
   exposed-modules:
     Fx
   other-modules:
-    Fx.Accessor
-    Fx.Eio
-    Fx.IO
     Fx.Prelude
-    Fx.Process
-    Fx.Provider
-    Fx.Types
-    Fx.Uio
   build-depends:
     base >=4.9 && <5,
     mtl >=2.2 && <3,
