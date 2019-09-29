@@ -23,12 +23,12 @@ import qualified Exceptionless as Eio
 Having an environment provider, execute an action,
 which uses the environment and produces either an error or result.
 -}
-provideAndAccess :: Provider env -> Accessor env err res -> Eio err res
+provideAndAccess :: Provider err env -> Accessor env err res -> Eio err res
 provideAndAccess (Provider providerEio) (Accessor accessorRdr) = do
-  (env, release) <- first absurd providerEio
+  (env, release) <- providerEio
   Eio.bindErr
-    (\ err -> first absurd release *> throwError err)
-    (runReaderT accessorRdr env <* first absurd release)
+    (\ err -> release *> throwError err)
+    (runReaderT accessorRdr env <* release)
 
 
 -- * Provider
@@ -42,26 +42,26 @@ Composes well, allowing you to merge multiple providers into one.
 
 Builds up on some ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -}
-newtype Provider env = Provider (Eio Void (env, Eio Void ()))
+newtype Provider err env = Provider (Eio err (env, Eio err ()))
 
-instance Functor Provider where
+instance Functor (Provider err) where
   fmap f (Provider m) = Provider $ do
     (env, release) <- m
     return (f env, release)
 
-instance Applicative Provider where
+instance Applicative (Provider err) where
   pure env = Provider (pure (env, pure ()))
   Provider m1 <*> Provider m2 = Provider $
     liftA2 (\ (env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
-instance Monad Provider where
+instance Monad (Provider err) where
   return = pure
   (>>=) (Provider m1) k2 = Provider $ do
     (env1, release1) <- m1
     (env2, release2) <- case k2 env1 of Provider m2 -> m2
     return (env2, release2 >> release1)
 
-instance EioLifting Void Provider where
+instance EioLifting err (Provider err) where
   liftEio = Provider . fmap (\ a -> (a, return ()))
 
 {-|
@@ -69,7 +69,7 @@ Create a resource provider from actions that don't fail.
 You can turn your exception-throwing actions into these
 by means of the `Eio` API.
 -}
-acquireAndRelease :: Eio Void env -> (env -> Eio Void ()) -> Provider env
+acquireAndRelease :: Eio err env -> (env -> Eio err ()) -> Provider err env
 acquireAndRelease acquire release = Provider (fmap (\ env -> (env, release env)) acquire)
 
 
