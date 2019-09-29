@@ -1,0 +1,3 @@
+resolver: https://raw.githubusercontent.com/metrix-ai/stack-snapshot/54/snapshot.yaml
+extra-deps:
+- {git: "https://github.com/nikita-volkov/exceptionless", commit: "fa9202f307b804564883e28e0d72174c8fa170e4"}

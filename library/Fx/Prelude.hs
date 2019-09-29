@@ -105,3 +105,7 @@ import Data.Semigroup.Bitraversable as Exports
 import Data.Semigroup.Foldable as Exports
 import Data.Semigroup.Traversable as Exports
 import Data.Semigroupoid as Exports
+
+-- exceptionless
+-------------------------
+import Exceptionless as Exports (Eio, EioLifting(..))
