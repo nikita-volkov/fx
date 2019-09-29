@@ -64,6 +64,13 @@ instance Monad (Provider err) where
 instance EioLifting err (Provider err) where
   liftEio = Provider . fmap (\ a -> (a, return ()))
 
+instance MonadIO (Provider SomeException) where
+  liftIO = liftEio @SomeException . liftIO
+
+instance Bifunctor Provider where
+  bimap fn1 fn2 (Provider m) = Provider (bimap fn1 (fn2 *** first fn1) m)
+  second = fmap
+
 {-|
 Create a resource provider from actions that don't fail.
 You can turn your exception-throwing actions into these
