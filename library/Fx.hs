@@ -119,8 +119,13 @@ mapEnv fn = mapAccessor (withReaderT fn)
 Lift an env-using function into accessor.
 
 This is the way you define accessors.
+
+__Warning__:
+This function leaks abstraction.
+It is your responsibility to make sure that you don't use the provided @env@
+outside of accessor.
 -}
-use :: (env -> Eio err ()) -> Accessor env err ()
+use :: (env -> Eio err a) -> Accessor env err a
 use = Accessor . ReaderT
 
 {-|
