@@ -9,6 +9,7 @@ module Fx
   Accessor,
   use,
   mapEnv,
+  fork,
 )
 where
 
@@ -121,3 +122,23 @@ This is the way you define accessors.
 -}
 use :: (env -> Eio err ()) -> Accessor env err ()
 use = Accessor . ReaderT
+
+{-|
+Fork a computation to be run on a separate thread,
+blocking until it finishes or fails,
+while also performing a computation on current thread.
+-}
+fork :: Accessor env err () -> Accessor env err res -> Accessor env err res
+fork (Accessor fork) (Accessor main) = Accessor $ ReaderT $ \ env -> do
+  blockVar <- Eio.liftSafeIO newEmptyMVar
+  Eio.fork $ let
+    handler err = Eio.liftSafeIO (putMVar blockVar (Just err))
+    in Eio.bindErr handler (runReaderT fork env)
+  mainRes <- Eio.exposeErr (runReaderT main env)
+  blockRes <- Eio.liftSafeIO (takeMVar blockVar)
+  case blockRes of
+    Just err -> throwError err
+    Nothing -> return ()
+  case mainRes of
+    Right res -> return res
+    Left err -> throwError err
