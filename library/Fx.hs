@@ -139,11 +139,9 @@ fork (Accessor fork) (Accessor main) = Accessor $ ReaderT $ \ env -> do
   Eio.fork $ let
     handler err = Eio.liftSafeIO (putMVar blockVar (Just err))
     in Eio.bindErr handler (runReaderT fork env)
-  mainRes <- Eio.exposeErr (runReaderT main env)
+  mainRes <- runReaderT main env
   blockRes <- Eio.liftSafeIO (takeMVar blockVar)
   case blockRes of
     Just err -> throwError err
     Nothing -> return ()
-  case mainRes of
-    Right res -> return res
-    Left err -> throwError err
+  return mainRes
