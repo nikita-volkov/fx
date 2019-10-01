@@ -9,7 +9,10 @@ module Fx
   Accessor,
   use,
   mapEnv,
-  fork,
+  concurrently,
+  -- * ConcAccessor
+  ConcAccessor,
+  sequentially,
 )
 where
 
@@ -129,19 +132,26 @@ use :: (env -> Eio err a) -> Accessor env err a
 use = Accessor . ReaderT
 
 {-|
-Fork a computation to be run on a separate thread,
-blocking until it finishes or fails,
-while also performing a computation on current thread.
+Lift a concurrently composed computation. 
 -}
-fork :: Accessor env err () -> Accessor env err res -> Accessor env err res
-fork (Accessor fork) (Accessor main) = Accessor $ ReaderT $ \ env -> do
-  blockVar <- Eio.liftSafeIO newEmptyMVar
-  Eio.fork $ let
-    handler err = Eio.liftSafeIO (putMVar blockVar (Just err))
-    in Eio.bindErr handler (runReaderT fork env)
-  mainRes <- runReaderT main env
-  blockRes <- Eio.liftSafeIO (takeMVar blockVar)
-  case blockRes of
-    Just err -> throwError err
-    Nothing -> return ()
-  return mainRes
+concurrently :: ConcAccessor env err res -> Accessor env err res
+concurrently (ConcAccessor accessor) = accessor
+
+
+-- * ConcAccessor
+-------------------------
+
+newtype ConcAccessor env err res = ConcAccessor (Accessor env err res)
+
+deriving instance Functor (ConcAccessor env err)
+
+instance Applicative (ConcAccessor env err) where
+  pure = ConcAccessor . pure
+  (<*>) (ConcAccessor (Accessor m1)) (ConcAccessor (Accessor m2)) = ConcAccessor $ Accessor $ ReaderT $ \ env ->
+    Eio.liftConcEio (liftEio (runReaderT m1 env) <*> liftEio (runReaderT m2 env))
+
+{-|
+Lift a sequentially composed computation. 
+-}
+sequentially :: Accessor env err res -> ConcAccessor env err res
+sequentially = ConcAccessor
