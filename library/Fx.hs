@@ -36,8 +36,8 @@ provideAndAccess (Provider providerEio) (Accessor accessorRdr) = do
 -------------------------
 
 {-|
-Environment provider.
-Encompasses resource acquisition, releasing and handling of all related errors.
+Effectful computation with explicit errors,
+which encompasses environment acquisition and releasing.
 
 Composes well, allowing you to merge multiple providers into one.
 
@@ -85,7 +85,7 @@ acquireAndRelease acquire release = Provider (fmap (\ env -> (env, release env))
 -------------------------
 
 {-|
-Environment handler, which has a notion of pure errors.
+Effectful computation with explicit errors in context of provided environment.
 -}
 newtype Accessor env err res = Accessor (ReaderT env (Eio err) res)
 
