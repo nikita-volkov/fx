@@ -4,6 +4,10 @@ module Fx
   fx,
   -- * Fx
   Fx,
+  liftSafeIO,
+  exposeErr,
+  absorbErr,
+  bindErr,
   start,
   wait,
   concurrently,
@@ -103,6 +107,45 @@ deriving instance Monoid err => Plus (Fx err)
 
 instance MonadFail (Fx err) where
   fail = Fx . liftIO . fail
+
+mapFx fn (Fx m) = Fx (fn m)
+
+{-|
+Turn IO action into a non-failing action.
+It is your responsibility to ensure that it does not throw exceptions.
+-}
+liftSafeIO :: IO a -> Fx err a
+liftSafeIO io = Fx (liftIO io)
+
+{-|
+Expose the error in result,
+producing an action, which is compatible with any error type.
+
+This function is particularly helpful, when you need to map into error of type `Void`.
+-}
+exposeErr :: Fx a res -> Fx err (Either a res)
+exposeErr = mapFx $ mapReaderT $ mapExceptT $ fmap $ Right
+
+{-|
+Map from error to result, leaving the error be anything.
+
+This function is particularly helpful, when you need to map into error of type `Void`.
+-}
+absorbErr :: (a -> res) -> Fx a res -> Fx err res
+absorbErr errProj = mapFx $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
+
+{-|
+Handle error in another failing action.
+
+This function is particularly helpful, when you need to map into error of type `Void`.
+-}
+bindErr :: (a -> Fx b res) -> Fx a res -> Fx b res
+bindErr handler = mapFx $ \ m -> ReaderT $ \ unmask -> ExceptT $ do
+  a <- runExceptT (runReaderT m unmask)
+  case a of
+    Right res -> return (Right res)
+    Left err -> case handler err of
+      Fx m -> runExceptT (runReaderT m unmask)
 
 start :: Fx err a -> Fx err' (Future err a)
 start (Fx m) =
