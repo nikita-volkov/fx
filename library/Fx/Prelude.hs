@@ -109,3 +109,12 @@ import Data.Semigroupoid as Exports
 -- text
 -------------------------
 import Data.Text as Exports (Text)
+
+-- stm
+-------------------------
+import Control.Concurrent.STM as Exports
+
+-- unordered-containers
+-------------------------
+import Data.HashSet as Exports (HashSet)
+import Data.HashMap.Strict as Exports (HashMap)
