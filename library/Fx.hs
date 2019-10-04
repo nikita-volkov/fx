@@ -1,9 +1,6 @@
 module Fx
 (
   -- * IO
-  app,
-  -- * App
-  App,
   fx,
   -- * Fx
   Fx,
@@ -27,28 +24,12 @@ import qualified Data.HashSet as HashSet
 -------------------------
 
 {-|
-Execute an `App`.
+Execute an effect with all errors handled.
 
 Conventionally, this is what should be placed in the @main@ function.
 -}
-app :: App a -> IO a
-app (App io) = io
-
-
--- * App
--------------------------
-
-{-|
-Encapsulates all errors and crashes.
--}
-newtype App a = App (IO a)
-  deriving (Functor, Applicative, Monad)
-
-{-|
-Execute an effect with all errors handled.
--}
-fx :: Fx Void a -> App a
-fx (Fx m) = App $ do
+fx :: Fx Void a -> IO a
+fx (Fx m) = do
 
   errChan <- newTQueueIO
   resVar <- newEmptyTMVarIO
