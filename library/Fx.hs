@@ -79,15 +79,14 @@ fx (Fx m) = do
 -------------------------
 
 {-|
-Can only be executed in `App`.
+Effectful computation with explicit errors.
 
-Calling `fail` causes the executing `App` to interrupt,
+Calling `fail` causes it to interrupt,
 killing all of its threads and outputting a message to console.
-
-This function is intended to be used in events which you expect never to happen,
+`fail` is intended to be used in events which you expect never to happen,
 and hence which should be considered bugs.
-It is quite similar to calling `fail` on IO,
-with a major difference of the error not getting lost in a concurrent environment.
+It is similar to calling `fail` on IO,
+with a major difference of the error never getting lost in a concurrent environment.
 -}
 newtype Fx err a = Fx (ReaderT Env (ExceptT err IO) a)
 
