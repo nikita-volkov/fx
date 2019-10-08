@@ -16,6 +16,8 @@ module Fx
   -- * Conc
   Conc,
   sequentially,
+  -- * Classes
+  FxLifting(..),
 )
 where
 
@@ -226,3 +228,33 @@ instance Applicative (Conc err) where
 
 sequentially :: Fx err a -> Conc err a
 sequentially = Conc
+
+
+-- * Classes
+-------------------------
+
+-- ** Fx Lifting
+-------------------------
+
+{-|
+Support for lifting of `Fx`.
+
+Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
+-}
+class FxLifting err m | m -> err where
+  liftFx :: Fx err a -> m a
+
+instance FxLifting err (ExceptT err IO) where
+  liftFx fx = ExceptT (liftFx (exposeErr fx))
+
+instance FxLifting Void IO where
+  liftFx = fx
+
+instance FxLifting err (Fx err) where
+  liftFx = id
+
+instance FxLifting err (Conc err) where
+  liftFx = Conc
+
+instance FxLifting err (Future err) where
+  liftFx = Future
