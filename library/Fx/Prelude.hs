@@ -75,7 +75,6 @@ import Unsafe.Coerce as Exports
 
 -- transformers
 -------------------------
-import Control.Monad.IO.Class as Exports
 import Control.Monad.Trans.Class as Exports
 import Control.Monad.Trans.Cont as Exports hiding (shift, callCC)
 import Control.Monad.Trans.Except as Exports (ExceptT(ExceptT), Except, except, runExcept, runExceptT, mapExcept, mapExceptT, withExcept, withExceptT, catchE, throwE)
