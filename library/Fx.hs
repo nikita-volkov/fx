@@ -15,8 +15,13 @@ module Fx
   -- * Conc
   Conc,
   -- * Classes
+  -- ** FxRunning
   FxRunning(..),
+  -- ** ErrHandling
   ErrHandling(..),
+  exposeErr,
+  absorbErr,
+  -- ** EnvMapping
   EnvMapping(..),
 )
 where
@@ -340,32 +345,26 @@ class ErrHandling m where
   throwErr :: err -> m err res
 
   {-|
-  Expose the error in result,
-  producing an action, which is compatible with any error type.
-  -}
-  exposeErr :: m a res -> m b (Either a res)
-
-  {-|
-  Map from error to result, leaving the error be anything.
-  -}
-  absorbErr :: (a -> res) -> m a res -> m b res
-
-  {-|
   Handle error in another failing action.
   Sort of like a bind operation over the error type parameter.
   -}
   handleErr :: (a -> m b res) -> m a res -> m b res
 
-defaultExposeErr :: (ErrHandling m, Functor (m a)) => m a res -> m b (Either a res)
-defaultExposeErr = absorbErr Left . fmap Right
+{-|
+Expose the error in result,
+producing an action, which is compatible with any error type.
+-}
+exposeErr :: (ErrHandling m, Functor (m a), Applicative (m b)) => m a res -> m b (Either a res)
+exposeErr = absorbErr Left . fmap Right
 
-defaultAbsorbErr :: (ErrHandling m, Applicative (m b)) => (a -> res) -> m a res -> m b res
-defaultAbsorbErr fn = handleErr (pure . fn)
+{-|
+Map from error to result, leaving the error be anything.
+-}
+absorbErr :: (ErrHandling m, Applicative (m b)) => (a -> res) -> m a res -> m b res
+absorbErr fn = handleErr (pure . fn)
 
 instance ErrHandling (Fx env) where
   throwErr = Fx . lift . throwE
-  exposeErr = mapFx $ mapReaderT $ mapExceptT $ fmap $ Right
-  absorbErr errProj = mapFx $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
   handleErr handler = mapFx $ \ m -> ReaderT $ \ unmask -> ExceptT $ do
     a <- runExceptT (runReaderT m unmask)
     case a of
