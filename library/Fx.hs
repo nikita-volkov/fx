@@ -118,7 +118,7 @@ mapFx fn (Fx m) = Fx (fn m)
 {-|
 Turn an IO action into a non-failing effect.
 It is your responsibility to ensure that it does not throw exceptions!
-`try` and `catch` are your tools.
+`try`, `catch` from \"base\" and `throwErr` from this library are your tools.
 -}
 runSafeIO :: IO a -> Fx env err a
 runSafeIO io = Fx (liftIO io)
