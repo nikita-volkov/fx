@@ -102,7 +102,6 @@ deriving instance Applicative (Fx env err)
 deriving instance Monoid err => Alternative (Fx env err)
 deriving instance Monad (Fx env err)
 deriving instance MonadFix (Fx env err)
-deriving instance MonadError err (Fx env err)
 deriving instance Monoid err => MonadPlus (Fx env err)
 deriving instance Apply (Fx env err)
 deriving instance Bind (Fx env err)
@@ -202,7 +201,7 @@ The way you deal with it is thru the `start` and `wait` functions.
 newtype Future env err a =
   {-| A blocking action, producing a result or failing. -}
   Future (Fx env err a)
-  deriving (Functor, Applicative, Monad, MonadError err, Bifunctor)
+  deriving (Functor, Applicative, Monad, Bifunctor)
 
 mapFuture fn (Future m) = Future (fn m)
 
@@ -328,6 +327,11 @@ when you need to map into error of type `Void`.
 class ErrHandling m where
 
   {-|
+  Interrupt the current computation raising an error.
+  -}
+  throwErr :: err -> m err res
+
+  {-|
   Expose the error in result,
   producing an action, which is compatible with any error type.
   -}
@@ -351,6 +355,7 @@ defaultAbsorbErr :: (ErrHandling m, Applicative (m b)) => (a -> res) -> m a res 
 defaultAbsorbErr fn = handleErr (pure . fn)
 
 instance ErrHandling (Fx env) where
+  throwErr = Fx . lift . throwE
   exposeErr = mapFx $ mapReaderT $ mapExceptT $ fmap $ Right
   absorbErr errProj = mapFx $ mapReaderT $ mapExceptT $ fmap $ either (Right . errProj) Right
   handleErr handler = mapFx $ \ m -> ReaderT $ \ unmask -> ExceptT $ do

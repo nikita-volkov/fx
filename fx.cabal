@@ -26,7 +26,6 @@ library
     Fx.Prelude
   build-depends:
     base >=4.9 && <5,
-    mtl >=2.2 && <3,
     semigroupoids >=5.3 && <6,
     stm >=2.5 && <3,
     text >=1 && <2,

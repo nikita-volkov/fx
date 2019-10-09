@@ -83,14 +83,6 @@ import Control.Monad.Trans.Reader as Exports (Reader, runReader, mapReader, with
 import Control.Monad.Trans.State.Strict as Exports (State, runState, evalState, execState, mapState, withState, StateT(StateT), runStateT, evalStateT, execStateT, mapStateT, withStateT)
 import Control.Monad.Trans.Writer.Strict as Exports (Writer, runWriter, execWriter, mapWriter, WriterT(..), execWriterT, mapWriterT)
 
--- mtl
--------------------------
-import Control.Monad.Cont.Class as Exports
-import Control.Monad.Error.Class as Exports hiding (Error(..))
-import Control.Monad.Reader.Class as Exports
-import Control.Monad.State.Class as Exports
-import Control.Monad.Writer.Class as Exports
-
 -- semigroupoids
 -------------------------
 import Data.Bifunctor.Apply as Exports
