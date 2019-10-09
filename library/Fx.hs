@@ -111,6 +111,9 @@ deriving instance Monoid err => MonadPlus (Fx env err)
 instance MonadFail (Fx env err) where
   fail = Fx . liftIO . fail
 
+instance MonadIO (Fx env SomeException) where
+  liftIO = Fx . lift . ExceptT . try
+
 instance Bifunctor (Fx env) where
   bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
 
