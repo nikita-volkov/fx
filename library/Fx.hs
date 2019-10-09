@@ -200,7 +200,7 @@ The way you deal with it is thru the `start` and `wait` functions.
 newtype Future env err a =
   {-| A blocking action, producing a result or failing. -}
   Future (Fx env err a)
-  deriving (Functor, Applicative, Monad, Bifunctor)
+  deriving (Functor, Apply, Applicative, Bind, Monad, MonadFail, Bifunctor)
 
 mapFuture fn (Future m) = Future (fn m)
 
@@ -218,6 +218,9 @@ newtype Conc env err a = Conc (Fx env err a)
 
 deriving instance Functor (Conc env err)
 deriving instance Bifunctor (Conc env)
+
+instance Apply (Conc env err) where
+  (<.>) = (<*>)
 
 instance Applicative (Conc env err) where
   pure = Conc . pure
@@ -249,10 +252,16 @@ instance Functor (Provider err) where
     (env, release) <- m
     return (f env, release)
 
+instance Apply (Provider err) where
+  (<.>) = (<*>)
+
 instance Applicative (Provider err) where
   pure env = Provider (pure (env, pure ()))
   Provider m1 <*> Provider m2 = Provider $
     liftA2 (\ (env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
+
+instance Bind (Provider err) where
+  (>>-) = (>>=)
 
 instance Monad (Provider err) where
   return = pure
