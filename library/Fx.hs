@@ -360,15 +360,8 @@ instance ErrHandling (Fx env) where
       Left err -> case handler err of
         Fx m -> runExceptT (runReaderT m unmask)
 
-instance ErrHandling (Future env) where
-  exposeErr = mapFuture exposeErr
-  absorbErr fn = mapFuture (absorbErr fn)
-  handleErr fn (Future m) = Future (handleErr (fn >>> \ (Future m') -> m') m)
-
-instance ErrHandling (Conc env) where
-  exposeErr = mapConc exposeErr
-  absorbErr fn = mapConc (absorbErr fn)
-  handleErr fn (Conc m) = Conc (handleErr (fn >>> \ (Conc m') -> m') m)
+deriving instance ErrHandling (Future env)
+deriving instance ErrHandling (Conc env)
 
 -- ** Env Mapping
 -------------------------
@@ -388,8 +381,5 @@ instance EnvMapping Fx where
     Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar appEnv) ->
       runReaderT m (Env crash childCountVar childTidsVar (fn appEnv))
 
-instance EnvMapping Future where
-  mapEnv fn = mapFuture (mapEnv fn)
-
-instance EnvMapping Conc where
-  mapEnv fn = mapConc (mapEnv fn)
+deriving instance EnvMapping Future
+deriving instance EnvMapping Conc
