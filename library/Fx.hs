@@ -179,14 +179,15 @@ concurrently (Conc fx) = fx
 Execute Fx in the scope of a provided environment.
 -}
 provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
-provideAndUse (Provider acquire) (Fx fx) =
+provideAndUse (Provider (Fx acquire)) (Fx fx) =
   Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar _) -> ExceptT $ do
-    acquisition <- runExceptT acquire
+    let providerEnv = Env crash childCountVar childTidsVar ()
+    acquisition <- runExceptT (runReaderT acquire providerEnv)
     case acquisition of
       Left err -> return (Left err)
-      Right (env, release) -> do
+      Right (env, (Fx release)) -> do
         resOrErr <- runExceptT (runReaderT fx (Env crash childCountVar childTidsVar env))
-        releasing <- runExceptT release
+        releasing <- runExceptT (runReaderT release providerEnv)
         return (resOrErr <* releasing)
 
 
@@ -243,7 +244,7 @@ Composes well, allowing you to merge multiple providers into one.
 Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 and later released as the \"managed\" package.
 -}
-newtype Provider err env = Provider (ExceptT err IO (env, ExceptT err IO ()))
+newtype Provider err env = Provider (Fx () err (env, Fx () err ()))
 
 instance Functor (Provider err) where
   fmap f (Provider m) = Provider $ do
@@ -263,21 +264,16 @@ instance Monad (Provider err) where
     return (env2, release2 >> release1)
 
 instance Bifunctor Provider where
-  bimap lf rf (Provider m) = Provider (mapExceptT (fmap (bimap lf (rf *** withExceptT lf))) m)
+  bimap lf rf (Provider m) = Provider (bimap lf (bimap rf (first lf)) m)
   second = fmap
 
 {-|
-Create a resource provider from acquiring and releasing actions that don't throw exceptions.
-It is your responsibility to ensure of that!
-`try` and `catch` are your tools.
+Create a resource provider from acquiring and releasing effects.
 -}
-acquireAndRelease :: IO (Either err env) -> (env -> IO (Either err ())) -> Provider err env
-acquireAndRelease acquire release =
-  Provider $ ExceptT $ do
-    envOrErr <- acquire
-    case envOrErr of
-      Left err -> return (Left err)
-      Right env -> return (Right (env, ExceptT (release env)))
+acquireAndRelease :: Fx () err env -> (env -> Fx () err ()) -> Provider err env
+acquireAndRelease acquire release = Provider $ do
+  env <- acquire
+  return (env, release env)
 
 
 -- * Classes
