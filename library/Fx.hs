@@ -3,6 +3,7 @@ module Fx
   -- * Fx
   Fx,
   provideAndUse,
+  handleEnv,
   start,
   wait,
   concurrently,
@@ -191,6 +192,15 @@ provideAndUse (Provider acquire) (Fx fx) =
         resOrErr <- runExceptT (runReaderT fx (Env crash childCountVar childTidsVar env))
         releasing <- runExceptT release
         return (resOrErr <* releasing)
+
+{-|
+Collapse an env handler into an environmental effect.
+-}
+handleEnv :: (env -> Fx () err res) -> Fx env err res
+handleEnv handler =
+  Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar env) ->
+    case handler env of
+      Fx rdr -> runReaderT rdr (Env crash childCountVar childTidsVar ())
 
 
 -- * Future
