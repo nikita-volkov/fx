@@ -2,12 +2,24 @@ module Fx
 (
   -- * Fx
   Fx,
+  -- ** Environment handling
   provideAndUse,
   handleEnv,
+  -- ** Concurrency
   start,
   wait,
   concurrently,
-  runSafeIO,
+  -- ** IO execution
+  -- |
+  -- These functions leak abstraction in one way or the other,
+  -- requiring you to ensure that your code doesn't throw unexpected exceptions.
+  -- `try` are `catch` are your tools for that.
+  -- 
+  -- Besides these functions `Fx` also has an instance of `MonadIO`,
+  -- which provides the only non-leaky way of running IO, catching all possible exceptions.
+  runTotalIO,
+  runPartialIO,
+  runExceptionalIO,
   -- * Provider
   Provider,
   acquireAndRelease,
@@ -121,12 +133,31 @@ instance Bifunctor (Fx env) where
 mapFx fn (Fx m) = Fx (fn m)
 
 {-|
-Turn an IO action into a non-failing effect.
+Turn a non-failing IO action into an effect.
+
+__Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
-`try`, `catch` from \"base\" and `throwErr` from this library are your tools.
 -}
-runSafeIO :: IO a -> Fx env err a
-runSafeIO io = Fx (liftIO io)
+runTotalIO :: IO a -> Fx env err a
+runTotalIO = Fx . liftIO
+
+{-|
+Run IO which produces either an error or result.
+
+__Warning:__
+It is your responsibility to ensure that it does not throw exceptions!
+-}
+runPartialIO :: IO (Either err res) -> Fx env err res
+runPartialIO = Fx . lift . ExceptT
+
+{-|
+Run IO which only throws a specific type of exception.
+
+__Warning:__
+It is your responsibility to ensure that it doesn't throw any other exceptions!
+-}
+runExceptionalIO :: Exception exc => IO res -> Fx env exc res
+runExceptionalIO = Fx . lift . ExceptT . try
 
 {-|
 Spawn a thread and start running an effect on it,
