@@ -196,6 +196,11 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
 
 {-|
 Collapse an env handler into an environmental effect.
+
+__Warning:__
+This function leaks the abstraction over the environment.
+It is your responsibility to ensure that you don't use it to return
+the environment and use it outside of the handler's scope.
 -}
 handleEnv :: (env -> Fx () err res) -> Fx env err res
 handleEnv handler =
