@@ -360,6 +360,9 @@ instance FxRunning env err (Conc env err) where
 instance FxRunning env err (Future env err) where
   runFx = Future
 
+instance FxRunning () err (Provider err) where
+  runFx fx = Provider (fmap (\ env -> (env, pure ())) fx)
+
 -- ** ErrHandling
 -------------------------
 
