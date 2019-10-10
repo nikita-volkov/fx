@@ -66,12 +66,12 @@ runFxInIO (Fx m) = do
         writeTQueue errChan msg
         readTVar childTidsVar
       forM_ (HashSet.toList childTids) killThread
-    env = Env crash childCountVar childTidsVar ()
+    fxEnv = FxEnv crash childCountVar childTidsVar ()
     in
       forkIO $ do
         catch
           (do
-            res <- fmap (either absurd id) (runExceptT (runReaderT m env))
+            res <- fmap (either absurd id) (runExceptT (runReaderT m fxEnv))
             atomically (putTMVar resVar res)
           )
           (\ (se :: SomeException) -> crash (fromString (show se)))
@@ -108,12 +108,12 @@ and hence which should be considered bugs.
 It is similar to calling `fail` on IO,
 with a major difference of the error never getting lost in a concurrent environment.
 -}
-newtype Fx env err res = Fx (ReaderT (Env env) (ExceptT err IO) res)
+newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 
 {-|
 Runtime and application environment.
 -}
-data Env env = Env (String -> IO ()) (TVar Int) (TVar (HashSet ThreadId)) env
+data FxEnv env = FxEnv (String -> IO ()) (TVar Int) (TVar (HashSet ThreadId)) env
 
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
@@ -165,7 +165,7 @@ returning the associated future.
 -}
 start :: Fx env err res -> Fx env err' (Future env err res)
 start (Fx m) =
-  Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar appEnv) -> ExceptT $ do
+  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) -> ExceptT $ do
 
     futureVar <- newEmptyMVar
 
@@ -179,7 +179,7 @@ start (Fx m) =
 
       finalize <- catch
         (do
-          res <- runExceptT (runReaderT m (Env crash childCountVar childTidsVar appEnv))
+          res <- runExceptT (runReaderT m (FxEnv crash childCountVar childTidsVar env))
           putMVar futureVar res
           return (return ())
         )
@@ -215,14 +215,14 @@ Execute Fx in the scope of a provided environment.
 -}
 provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
 provideAndUse (Provider (Fx acquire)) (Fx fx) =
-  Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar _) -> ExceptT $ do
-    let providerEnv = Env crash childCountVar childTidsVar ()
-    acquisition <- runExceptT (runReaderT acquire providerEnv)
+  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar _) -> ExceptT $ do
+    let providerFxEnv = FxEnv crash childCountVar childTidsVar ()
+    acquisition <- runExceptT (runReaderT acquire providerFxEnv)
     case acquisition of
       Left err -> return (Left err)
       Right (env, (Fx release)) -> do
-        resOrErr <- runExceptT (runReaderT fx (Env crash childCountVar childTidsVar env))
-        releasing <- runExceptT (runReaderT release providerEnv)
+        resOrErr <- runExceptT (runReaderT fx (FxEnv crash childCountVar childTidsVar env))
+        releasing <- runExceptT (runReaderT release providerFxEnv)
         return (resOrErr <* releasing)
 
 {-|
@@ -235,9 +235,9 @@ the environment and use it outside of the handler's scope.
 -}
 handleEnv :: (env -> Fx () err res) -> Fx env err res
 handleEnv handler =
-  Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar env) ->
+  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) ->
     case handler env of
-      Fx rdr -> runReaderT rdr (Env crash childCountVar childTidsVar ())
+      Fx rdr -> runReaderT rdr (FxEnv crash childCountVar childTidsVar ())
 
 
 -- * Future
@@ -425,8 +425,8 @@ class EnvMapping m where
 
 instance EnvMapping Fx where
   mapEnv fn (Fx m) =
-    Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar appEnv) ->
-      runReaderT m (Env crash childCountVar childTidsVar (fn appEnv))
+    Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) ->
+      runReaderT m (FxEnv crash childCountVar childTidsVar (fn env))
 
 deriving instance EnvMapping Future
 deriving instance EnvMapping Conc
