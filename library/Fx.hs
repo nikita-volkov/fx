@@ -52,7 +52,7 @@ Execute an effect with no environment and all errors handled.
 
 Conventionally, this is what should be placed in the @main@ function.
 -}
-runFxInIO :: Fx () Void a -> IO a
+runFxInIO :: Fx () Void res -> IO res
 runFxInIO (Fx m) = do
 
   errChan <- newTQueueIO
@@ -108,7 +108,7 @@ and hence which should be considered bugs.
 It is similar to calling `fail` on IO,
 with a major difference of the error never getting lost in a concurrent environment.
 -}
-newtype Fx env err a = Fx (ReaderT (Env env) (ExceptT err IO) a)
+newtype Fx env err res = Fx (ReaderT (Env env) (ExceptT err IO) res)
 
 {-|
 Runtime and application environment.
@@ -138,7 +138,7 @@ Turn a non-failing IO action into an effect.
 __Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
 -}
-runTotalIO :: IO a -> Fx env err a
+runTotalIO :: IO res -> Fx env err res
 runTotalIO = Fx . liftIO
 
 {-|
@@ -163,7 +163,7 @@ runExceptionalIO = Fx . lift . ExceptT . try
 Spawn a thread and start running an effect on it,
 returning the associated future.
 -}
-start :: Fx env err a -> Fx env err' (Future env err a)
+start :: Fx env err res -> Fx env err' (Future env err res)
 start (Fx m) =
   Fx $ ReaderT $ \ (Env crash childCountVar childTidsVar appEnv) -> ExceptT $ do
 
@@ -201,13 +201,13 @@ start (Fx m) =
 {-|
 Block until a future completes either with a result or an error.
 -}
-wait :: Future env err a -> Fx env err a
+wait :: Future env err res -> Fx env err res
 wait (Future fx) = fx
 
 {-|
 Execute concurrent effects.
 -}
-concurrently :: Conc env err a -> Fx env err a
+concurrently :: Conc env err res -> Fx env err res
 concurrently (Conc fx) = fx
 
 {-|
@@ -248,9 +248,9 @@ Handle to a result of an action which may still be being calculated.
 
 The way you deal with it is thru the `start` and `wait` functions.
 -}
-newtype Future env err a =
+newtype Future env err res =
   {-| A blocking action, producing a result or failing. -}
-  Future (Fx env err a)
+  Future (Fx env err res)
   deriving (Functor, Applicative, Monad, MonadFail, Bifunctor)
 
 mapFuture fn (Future m) = Future (fn m)
@@ -265,7 +265,7 @@ whose instances compose by running computations on separate threads.
 
 You can turn `Fx` into `Conc` using `runFx`.
 -}
-newtype Conc env err a = Conc (Fx env err a)
+newtype Conc env err res = Conc (Fx env err res)
 
 deriving instance Functor (Conc env err)
 deriving instance Bifunctor (Conc env)
@@ -337,7 +337,7 @@ Support for running of `Fx`.
 Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
 -}
 class FxRunning env err m | m -> env, m -> err where
-  runFx :: Fx env err a -> m a
+  runFx :: Fx env err res -> m res
 
 {-|
 Executes an effect with no environment and all errors handled.
