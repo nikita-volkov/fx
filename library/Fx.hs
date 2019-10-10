@@ -53,7 +53,7 @@ Execute an effect with no environment and all errors handled.
 Conventionally, this is what should be placed in the @main@ function.
 -}
 runFxInIO :: Fx () Void res -> IO res
-runFxInIO (Fx m) = do
+runFxInIO (Fx m) = mask $ \ unmask -> do
 
   errChan <- newTQueueIO
   resVar <- newEmptyTMVarIO
@@ -66,7 +66,7 @@ runFxInIO (Fx m) = do
         writeTQueue errChan msg
         readTVar childTidsVar
       forM_ (HashSet.toList childTids) killThread
-    fxEnv = FxEnv crash childCountVar childTidsVar ()
+    fxEnv = FxEnv unmask crash childCountVar childTidsVar ()
     in
       forkIO $ do
         catch
@@ -113,7 +113,7 @@ newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 {-|
 Runtime and application environment.
 -}
-data FxEnv env = FxEnv (String -> IO ()) (TVar Int) (TVar (HashSet ThreadId)) env
+data FxEnv env = FxEnv (forall a. IO a -> IO a) (String -> IO ()) (TVar Int) (TVar (HashSet ThreadId)) env
 
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
@@ -165,7 +165,7 @@ returning the associated future.
 -}
 start :: Fx env err res -> Fx env err' (Future env err res)
 start (Fx m) =
-  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) -> ExceptT $ do
+  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) -> ExceptT $ do
 
     futureVar <- newEmptyMVar
 
@@ -179,7 +179,7 @@ start (Fx m) =
 
       finalize <- catch
         (do
-          res <- runExceptT (runReaderT m (FxEnv crash childCountVar childTidsVar env))
+          res <- runExceptT (runReaderT m (FxEnv unmask crash childCountVar childTidsVar env))
           putMVar futureVar res
           return (return ())
         )
@@ -215,13 +215,13 @@ Execute Fx in the scope of a provided environment.
 -}
 provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
 provideAndUse (Provider (Fx acquire)) (Fx fx) =
-  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar _) -> ExceptT $ do
-    let providerFxEnv = FxEnv crash childCountVar childTidsVar ()
+  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar _) -> ExceptT $ do
+    let providerFxEnv = FxEnv unmask crash childCountVar childTidsVar ()
     acquisition <- runExceptT (runReaderT acquire providerFxEnv)
     case acquisition of
       Left err -> return (Left err)
       Right (env, (Fx release)) -> do
-        resOrErr <- runExceptT (runReaderT fx (FxEnv crash childCountVar childTidsVar env))
+        resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash childCountVar childTidsVar env))
         releasing <- runExceptT (runReaderT release providerFxEnv)
         return (resOrErr <* releasing)
 
@@ -235,9 +235,9 @@ the environment and use it outside of the handler's scope.
 -}
 handleEnv :: (env -> Fx () err res) -> Fx env err res
 handleEnv handler =
-  Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) ->
+  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) ->
     case handler env of
-      Fx rdr -> runReaderT rdr (FxEnv crash childCountVar childTidsVar ())
+      Fx rdr -> runReaderT rdr (FxEnv unmask crash childCountVar childTidsVar ())
 
 
 -- * Future
@@ -425,8 +425,8 @@ class EnvMapping m where
 
 instance EnvMapping Fx where
   mapEnv fn (Fx m) =
-    Fx $ ReaderT $ \ (FxEnv crash childCountVar childTidsVar env) ->
-      runReaderT m (FxEnv crash childCountVar childTidsVar (fn env))
+    Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) ->
+      runReaderT m (FxEnv unmask crash childCountVar childTidsVar (fn env))
 
 deriving instance EnvMapping Future
 deriving instance EnvMapping Conc
