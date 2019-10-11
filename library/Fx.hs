@@ -53,46 +53,60 @@ Execute an effect with no environment and all errors handled.
 Conventionally, this is what should be placed in the @main@ function.
 -}
 runFxInIO :: Fx () Void res -> IO res
-runFxInIO (Fx m) = mask $ \ unmask -> do
+runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
 
-  errChan <- newTQueueIO
+  fatalErrChan <- newTQueueIO
   resVar <- newEmptyTMVarIO
-  childCountVar <- newTVarIO 1
-  childTidsVar <- newTVarIO HashSet.empty
 
-  let
-    crash msg = do
-      childTids <- atomically $ do
-        writeTQueue errChan msg
-        readTVar childTidsVar
-      forM_ (HashSet.toList childTids) killThread
-    fxEnv = FxEnv unmask crash childCountVar childTidsVar ()
-    in
-      forkIO $ do
+  forkIO $ do
+
+    tid <- myThreadId
+
+    finalize <- let
+      crash tids msg = atomically (writeTQueue fatalErrChan (tid : tids, msg))
+      fxEnv = FxEnv unmask crash ()
+      in
         catch
           (do
-            res <- fmap (either absurd id) (runExceptT (runReaderT m fxEnv))
-            atomically (putTMVar resVar res)
+            resOrVoid <- runExceptT (runReaderT m fxEnv)
+            return $ case resOrVoid of
+              Right res -> atomically (putTMVar resVar res)
+              Left _ -> crash [] "Unexpected void. Please report this to maintainers of \"fx\""
           )
-          (\ (se :: SomeException) -> crash (fromString (show se)))
-        atomically (modifyTVar' childCountVar pred)
+          (\ exc -> return $ case fromException exc of
+            -- Catch calls to `error`.
+            Just (ErrorCallWithLocation dls ltn) ->
+              crash []
+                ("Error called in main \"fx\" thread at " <> ltn <> ". Details: " <> dls)
+            -- Catch anything else we could miss. Just in case.
+            _ ->
+              crash []
+                ("Unexpected exception. Please report it to maintainers of \"fx\". Details: " <> show exc)
+          )
 
-  -- Block until all subthreads are dead
-  atomically $ do
-    childCount <- readTVar childCountVar
-    guard (childCount == 0)
+    -- Throw errors or post the result
+    finalize
 
-  join $ atomically $ do
-    asum
-      [
-        do
-          err <- readTQueue errChan
-          return $ fail err
-        ,
-        do
-          res <- readTMVar resVar
-          return $ return res
-      ]
+  -- Wait for fatal error or result
+  join $ catch
+    (
+      unmask $ atomically $ asum
+        [
+          do
+            (tids, dls) <- readTQueue fatalErrChan
+            return $ fail
+              (
+                "Fatal error at the following thread nesting path: " <>
+                "/" <> (intercalate "/" (reverse (fmap show tids))) <> ". " <>
+                "Details: " <> dls
+              )
+          ,
+          do
+            res <- readTMVar resVar
+            return $ return res
+        ]
+    )
+    (\ (exc :: SomeException) -> fail ("Failed waiting for final result. Details: " <> show exc))
 
 
 -- * Fx
@@ -101,8 +115,7 @@ runFxInIO (Fx m) = mask $ \ unmask -> do
 {-|
 Effectful computation with explicit errors in the context of provided environment.
 
-Calling `fail` causes it to interrupt,
-killing all of its threads and outputting a message to console.
+Calling `fail` causes the whole app to interrupt outputting a message to console.
 `fail` is intended to be used in events which you expect never to happen,
 and hence which should be considered bugs.
 It is similar to calling `fail` on IO,
@@ -113,7 +126,7 @@ newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 {-|
 Runtime and application environment.
 -}
-data FxEnv env = FxEnv (forall a. IO a -> IO a) (String -> IO ()) (TVar Int) (TVar (HashSet ThreadId)) env
+data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> String -> IO ()) env
 
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
@@ -125,7 +138,7 @@ instance MonadFail (Fx env err) where
   fail = Fx . liftIO . fail
 
 instance MonadIO (Fx env SomeException) where
-  liftIO = Fx . lift . ExceptT . try
+  liftIO io = Fx (ReaderT (\ (FxEnv unmask _ _) -> ExceptT (try (unmask io))))
 
 instance Bifunctor (Fx env) where
   bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
@@ -139,7 +152,12 @@ __Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
 -}
 runTotalIO :: IO res -> Fx env err res
-runTotalIO = Fx . liftIO
+runTotalIO io = Fx $ ReaderT $ \ (FxEnv unmask crash _) -> lift $
+  catch (unmask io)
+    (\ (exc :: SomeException) -> do
+      crash [] ("Unhandled exception in runTotalIO: " <> show exc)
+      fail "Unhandled exception in runTotalIO. Got propagated to top."
+    )
 
 {-|
 Run IO which produces either an error or result.
@@ -148,7 +166,7 @@ __Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
 -}
 runPartialIO :: IO (Either err res) -> Fx env err res
-runPartialIO = Fx . lift . ExceptT
+runPartialIO io = runTotalIO io >>= either throwErr return
 
 {-|
 Run IO which only throws a specific type of exception.
@@ -157,7 +175,7 @@ __Warning:__
 It is your responsibility to ensure that it doesn't throw any other exceptions!
 -}
 runExceptionalIO :: Exception exc => IO res -> Fx env exc res
-runExceptionalIO = Fx . lift . ExceptT . try
+runExceptionalIO io = runPartialIO (try io)
 
 {-|
 Spawn a thread and start running an effect on it,
@@ -171,38 +189,46 @@ if you use `wait` at some point.
 -}
 start :: Fx env err res -> Fx env err' (Future env err res)
 start (Fx m) =
-  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) -> ExceptT $ do
+  Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $ do
 
     futureVar <- newEmptyMVar
-
-    atomically (modifyTVar' childCountVar succ)
 
     forkIO $ do
 
       tid <- myThreadId
 
-      atomically (modifyTVar' childTidsVar (HashSet.insert tid))
+      let childCrash tids dls = crash (tid : tids) dls
 
-      finalize <- catch
-        (do
-          res <- runExceptT (runReaderT m (FxEnv unmask crash childCountVar childTidsVar env))
-          putMVar futureVar res
-          return (return ())
-        )
-        (\ se -> case fromException se of
-          Just ThreadKilled -> return (return ())
-          _ -> return (crash (show se))
-        )
+      finalize <-
+        catch
+          (do
+            res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
+            return (putMVar futureVar (Just res))
+          )
+          (\ exc -> return $ case fromException exc of
+            -- Catch calls to `error`.
+            Just (ErrorCallWithLocation dls ltn) ->
+              crash []
+                ("Error called in main \"fx\" thread at " <> ltn <> ". Details: " <> dls)
+            -- Catch anything else we could miss. Just in case.
+            _ ->
+              crash []
+                ("Unexpected exception. Please report it to maintainers of \"fx\". Details: " <> show exc)
+          )
 
-      -- Deregister
-      atomically $ do
-        modifyTVar' childCountVar pred
-        modifyTVar' childTidsVar (HashSet.delete tid)
-
-      -- Do whatever needs to be done before exiting
       finalize
 
-    return (Right (Future (Fx (lift (ExceptT (readMVar futureVar))))))
+    return $ Right $ Future $ Fx $ lift $ ExceptT $ join $ catch
+      (do
+        resOrCrash <- unmask (readMVar futureVar)
+        return $ case resOrCrash of
+          Just res -> return res
+          Nothing -> fail "Thread crashed during execution."
+      )
+      (\ (exc :: SomeException) -> do
+        crash [] ("Failed waiting for result. Details: " <> show exc)
+        fail "Thread crashed with uncaught exception waiting for result."
+      )
 
 {-|
 Block until a future completes either with a result or an error.
@@ -221,13 +247,13 @@ Execute Fx in the scope of a provided environment.
 -}
 provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
 provideAndUse (Provider (Fx acquire)) (Fx fx) =
-  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar _) -> ExceptT $ do
-    let providerFxEnv = FxEnv unmask crash childCountVar childTidsVar ()
+  Fx $ ReaderT $ \ (FxEnv unmask crash _) -> ExceptT $ do
+    let providerFxEnv = FxEnv unmask crash ()
     acquisition <- runExceptT (runReaderT acquire providerFxEnv)
     case acquisition of
       Left err -> return (Left err)
       Right (env, (Fx release)) -> do
-        resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash childCountVar childTidsVar env))
+        resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
         releasing <- runExceptT (runReaderT release providerFxEnv)
         return (resOrErr <* releasing)
 
@@ -241,9 +267,9 @@ the environment and use it outside of the handler's scope.
 -}
 handleEnv :: (env -> Fx () err res) -> Fx env err res
 handleEnv handler =
-  Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) ->
+  Fx $ ReaderT $ \ (FxEnv unmask crash env) ->
     case handler env of
-      Fx rdr -> runReaderT rdr (FxEnv unmask crash childCountVar childTidsVar ())
+      Fx rdr -> runReaderT rdr (FxEnv unmask crash ())
 
 
 -- * Future
@@ -431,8 +457,8 @@ class EnvMapping m where
 
 instance EnvMapping Fx where
   mapEnv fn (Fx m) =
-    Fx $ ReaderT $ \ (FxEnv unmask crash childCountVar childTidsVar env) ->
-      runReaderT m (FxEnv unmask crash childCountVar childTidsVar (fn env))
+    Fx $ ReaderT $ \ (FxEnv unmask crash env) ->
+      runReaderT m (FxEnv unmask crash (fn env))
 
 deriving instance EnvMapping Future
 deriving instance EnvMapping Conc
