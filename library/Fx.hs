@@ -97,7 +97,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
             return $ fail
               (
                 "Fatal error at the following thread nesting path: " <>
-                "/" <> (intercalate "/" (reverse (fmap show tids))) <> ". " <>
+                "/" <> (intercalate "/" (reverse (fmap (drop 9 . show) tids))) <> ". " <>
                 "Details: " <> dls
               )
           ,
