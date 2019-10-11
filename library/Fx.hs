@@ -344,6 +344,9 @@ instance Monad (Provider err) where
     (env2, release2) <- case k2 env1 of Provider m2 -> m2
     return (env2, release2 >> release1)
 
+instance MonadIO (Provider SomeException) where
+  liftIO = runFx . liftIO
+
 instance Bifunctor Provider where
   bimap lf rf (Provider m) = Provider (bimap lf (bimap rf (first lf)) m)
   second = fmap
