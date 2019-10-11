@@ -162,6 +162,12 @@ runExceptionalIO = Fx . lift . ExceptT . try
 {-|
 Spawn a thread and start running an effect on it,
 returning the associated future.
+
+Fatal errors on the spawned thread are guaranteed to get propagated to the top.
+By fatal errors we mean calls to `error`, `fail` and uncaught exceptions.
+
+Normal errors (the explicit @err@ parameter) will only propagate
+if you use `wait` at some point.
 -}
 start :: Fx env err res -> Fx env err' (Future env err res)
 start (Fx m) =
