@@ -116,6 +116,9 @@ Calling `fail` causes the whole app to interrupt outputting a message to console
 and hence which should be considered bugs.
 It is similar to calling `fail` on IO,
 with a major difference of the error never getting lost in a concurrent environment.
+
+Calling `fail` results in `ErrorCallFxExceptionReason` in the triggerred `FxException`.
+Thus in effect it is the same as calling the `error` function.
 -}
 newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 
@@ -131,7 +134,9 @@ deriving instance Monad (Fx env err)
 deriving instance Monoid err => MonadPlus (Fx env err)
 
 instance MonadFail (Fx env err) where
-  fail = Fx . liftIO . fail
+  fail msg = Fx $ ReaderT $ \ (FxEnv _ crash _) -> liftIO $ do
+    crash [] (ErrorCallFxExceptionReason (ErrorCall msg))
+    fail "Crashed"
 
 instance MonadIO (Fx env SomeException) where
   liftIO io = Fx (ReaderT (\ (FxEnv unmask _ _) -> ExceptT (try (unmask io))))
