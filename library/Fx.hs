@@ -36,6 +36,9 @@ module Fx
   absorbErr,
   -- ** EnvMapping
   EnvMapping(..),
+  -- * Exceptions
+  FxException(..),
+  FxExceptionReason(..),
 )
 where
 
@@ -63,7 +66,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
     tid <- myThreadId
 
     finalize <- let
-      crash tids msg = atomically (writeTQueue fatalErrChan (tid : tids, msg))
+      crash tids reason = atomically (writeTQueue fatalErrChan (FxException (tid : tids) reason))
       fxEnv = FxEnv unmask crash ()
       in
         catch
@@ -71,17 +74,13 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
             resOrVoid <- runExceptT (runReaderT m fxEnv)
             return $ case resOrVoid of
               Right res -> atomically (putTMVar resVar res)
-              Left _ -> crash [] "Unexpected void. Please report this to maintainers of \"fx\""
+              Left _ -> crash [] (BugFxExceptionReason "Unexpected void")
           )
           (\ exc -> return $ case fromException exc of
             -- Catch calls to `error`.
-            Just (ErrorCallWithLocation dls ltn) ->
-              crash []
-                ("Error called in main \"fx\" thread at " <> ltn <> ". Details: " <> dls)
+            Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
             -- Catch anything else we could miss. Just in case.
-            _ ->
-              crash []
-                ("Unexpected exception. Please report it to maintainers of \"fx\". Details: " <> show exc)
+            _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
           )
 
     -- Throw errors or post the result
@@ -93,20 +92,17 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
       unmask $ atomically $ asum
         [
           do
-            (tids, dls) <- readTQueue fatalErrChan
-            return $ fail
-              (
-                "Fatal error at the following thread nesting path: " <>
-                "/" <> (intercalate "/" (reverse (fmap (drop 9 . show) tids))) <> ". " <>
-                "Details: " <> dls
-              )
+            fatalErr <- readTQueue fatalErrChan
+            return $ throwIO fatalErr
           ,
           do
             res <- readTMVar resVar
             return $ return res
         ]
     )
-    (\ (exc :: SomeException) -> fail ("Failed waiting for final result. Details: " <> show exc))
+    (\ (exc :: SomeException) ->
+      throwIO (FxException [] (BugFxExceptionReason
+        ("Failed waiting for final result: " <> show exc))))
 
 
 -- * Fx
@@ -126,7 +122,7 @@ newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 {-|
 Runtime and application environment.
 -}
-data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> String -> IO ()) env
+data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> FxExceptionReason -> IO ()) env
 
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
@@ -155,7 +151,7 @@ runTotalIO :: IO res -> Fx env err res
 runTotalIO io = Fx $ ReaderT $ \ (FxEnv unmask crash _) -> lift $
   catch (unmask io)
     (\ (exc :: SomeException) -> do
-      crash [] ("Unhandled exception in runTotalIO: " <> show exc)
+      crash [] (UncaughtExceptionFxExceptionReason exc)
       fail "Unhandled exception in runTotalIO. Got propagated to top."
     )
 
@@ -207,13 +203,9 @@ start (Fx m) =
           )
           (\ exc -> return $ case fromException exc of
             -- Catch calls to `error`.
-            Just (ErrorCallWithLocation dls ltn) ->
-              crash []
-                ("Error called in main \"fx\" thread at " <> ltn <> ". Details: " <> dls)
+            Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
             -- Catch anything else we could miss. Just in case.
-            _ ->
-              crash []
-                ("Unexpected exception. Please report it to maintainers of \"fx\". Details: " <> show exc)
+            _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
           )
 
       finalize
@@ -226,7 +218,7 @@ start (Fx m) =
           Nothing -> fail "Thread crashed during execution."
       )
       (\ (exc :: SomeException) -> do
-        crash [] ("Failed waiting for result. Details: " <> show exc)
+        crash [] (BugFxExceptionReason ("Failed waiting for result: " <> show exc))
         fail "Thread crashed with uncaught exception waiting for result."
       )
 
@@ -465,3 +457,44 @@ instance EnvMapping Fx where
 
 deriving instance EnvMapping Future
 deriving instance EnvMapping Conc
+
+
+-- * Exceptions
+-------------------------
+
+{-|
+Fatal failure of an `Fx` application.
+Informs of an unrecoverable condition that the application has reached.
+It is not meant to be caught,
+because it implies that there is either a bug in your code or
+a bug in the "fx" library itself, which needs reporting.
+
+Consists of a list of thread identifiers specifying the nesting path of
+the faulty thread and the reason of failure.
+-}
+data FxException = FxException [ThreadId] FxExceptionReason
+
+instance Show FxException where
+  show = let
+    showTids = intercalate "/" . fmap (drop 9 . show)
+    in \ (FxException tids reason) ->
+      "Fatal error at thread path /" <> showTids tids <> ". " <> show reason
+
+instance Exception FxException
+
+{-|
+Reason of a fatal failure of an `Fx` application.
+-}
+data FxExceptionReason =
+  UncaughtExceptionFxExceptionReason SomeException |
+  ErrorCallFxExceptionReason ErrorCall |
+  BugFxExceptionReason String
+
+instance Show FxExceptionReason where
+  show = \ case
+    UncaughtExceptionFxExceptionReason exc -> 
+      "Uncaught exception. " <> show exc
+    ErrorCallFxExceptionReason errorCall -> 
+      show errorCall
+    BugFxExceptionReason details ->
+      "Bug in the \"fx\" library. Please report it to maintainers. " <> details
