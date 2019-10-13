@@ -20,6 +20,7 @@ module Fx
   runTotalIO,
   runPartialIO,
   runExceptionalIO,
+  runStm,
   -- * Provider
   Provider,
   acquireAndRelease,
@@ -177,6 +178,14 @@ It is your responsibility to ensure that it doesn't throw any other exceptions!
 -}
 runExceptionalIO :: Exception exc => IO res -> Fx env exc res
 runExceptionalIO io = runPartialIO (try io)
+
+{-|
+Run STM, crashing in case of STM exceptions.
+
+Same as @`runTotalIO` . `atomically`@.
+-}
+runStm :: STM res -> Fx env err res
+runStm = runTotalIO . atomically
 
 {-|
 Spawn a thread and start running an effect on it,
