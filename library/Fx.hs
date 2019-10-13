@@ -102,8 +102,11 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
         ]
     )
     (\ (exc :: SomeException) ->
-      throwIO (FxException [] (BugFxExceptionReason
-        ("Failed waiting for final result: " <> show exc))))
+      case fromException exc of
+        Just (exc :: AsyncException) -> throwIO exc
+        _ ->
+          throwIO (FxException [] (BugFxExceptionReason
+            ("Failed waiting for final result: " <> show exc))))
 
 
 -- * Fx
