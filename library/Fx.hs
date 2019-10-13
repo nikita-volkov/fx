@@ -20,7 +20,7 @@ module Fx
   runTotalIO,
   runPartialIO,
   runExceptionalIO,
-  runStm,
+  runSTM,
   -- * Provider
   Provider,
   acquireAndRelease,
@@ -187,8 +187,8 @@ Run STM, crashing in case of STM exceptions.
 
 Same as @`runTotalIO` . `atomically`@.
 -}
-runStm :: STM res -> Fx env err res
-runStm = runTotalIO . atomically
+runSTM :: STM res -> Fx env err res
+runSTM = runTotalIO . atomically
 
 {-|
 Spawn a thread and start running an effect on it,
