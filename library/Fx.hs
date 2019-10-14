@@ -200,11 +200,11 @@ By fatal errors we mean calls to `error`, `fail` and uncaught exceptions.
 Normal errors (the explicit @err@ parameter) will only propagate
 if you use `wait` at some point.
 -}
-start :: Fx env err res -> Fx env err' (Future env err res)
+start :: Fx env err res -> Fx env err' (Future err res)
 start (Fx m) =
-  Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $ do
+  Fx $ ReaderT $ \ (FxEnv unmask crash env) -> lift $ do
 
-    futureVar <- newEmptyMVar
+    futureVar <- newEmptyTMVarIO
 
     forkIO $ do
 
@@ -216,34 +216,37 @@ start (Fx m) =
         catch
           (do
             res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
-            return (putMVar futureVar (Just res))
+            return (atomically (putTMVar futureVar (Just res)))
           )
-          (\ exc -> return $ case fromException exc of
-            -- Catch calls to `error`.
-            Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
-            -- Catch anything else we could miss. Just in case.
-            _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
+          (\ exc -> return $ do
+            case fromException exc of
+              -- Catch calls to `error`.
+              Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
+              -- Catch anything else we could miss. Just in case.
+              _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
+            atomically (putTMVar futureVar Nothing)
           )
 
       finalize
 
-    return $ Right $ Future $ Fx $ lift $ ExceptT $ join $ catch
-      (do
-        resOrCrash <- unmask (readMVar futureVar)
-        return $ case resOrCrash of
-          Just res -> return res
-          Nothing -> fail "Thread crashed during execution."
-      )
-      (\ (exc :: SomeException) -> do
-        crash [] (BugFxExceptionReason ("Failed waiting for result: " <> show exc))
-        fail "Thread crashed with uncaught exception waiting for result."
-      )
+    return $ Future $ ExceptT $ MaybeT $ readTMVar futureVar
 
 {-|
-Block until a future completes either with a result or an error.
+Block until the future completes either with a result or an error.
 -}
-wait :: Future env err res -> Fx env err res
-wait (Future fx) = fx
+wait :: Future err res -> Fx env err res
+wait (Future m) = Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $ join $ catch
+  (do
+    futureStatus <- unmask (atomically (runMaybeT (runExceptT m)))
+    return $ case futureStatus of
+      Just (Right res) -> return (Right res)
+      Just (Left err) -> return (Left err)
+      Nothing -> fail "Waiting for a future that crashed"
+  )
+  (\ (exc :: SomeException) -> return $ do
+    crash [] (BugFxExceptionReason ("Failed waiting for result: " <> show exc))
+    fail "Thread crashed with uncaught exception waiting for result."
+  )
 
 {-|
 Execute concurrent effects.
@@ -289,10 +292,11 @@ Handle to a result of an action which may still be being calculated.
 
 The way you deal with it is thru the `start` and `wait` functions.
 -}
-newtype Future env err res =
-  {-| A blocking action, producing a result or failing. -}
-  Future (Fx env err res)
-  deriving (Functor, Applicative, Monad, MonadFail, Bifunctor)
+newtype Future err res = Future (ExceptT err (MaybeT STM) res)
+  deriving (Functor, Applicative, Monad)
+
+instance Bifunctor Future where
+  bimap lf rf = mapFuture (mapExceptT (fmap (bimap lf rf)))
 
 mapFuture fn (Future m) = Future (fn m)
 
@@ -407,9 +411,6 @@ instance FxRunning () Void (Fx env err) where
 instance FxRunning env err (Conc env err) where
   runFx = Conc
 
-instance FxRunning env err (Future env err) where
-  runFx = Future
-
 instance FxRunning () err (Provider err) where
   runFx fx = Provider (fmap (\ env -> (env, pure ())) fx)
 
@@ -457,7 +458,15 @@ instance ErrHandling (Fx env) where
       Left err -> case handler err of
         Fx m -> runExceptT (runReaderT m unmask)
 
-deriving instance ErrHandling (Future env)
+instance ErrHandling Future where
+  throwErr = Future . throwE
+  handleErr handler = mapFuture $ \ m -> ExceptT $ do
+    a <- runExceptT m
+    case a of
+      Right res -> return (Right res)
+      Left err -> case handler err of
+        Future m' -> runExceptT m'
+
 deriving instance ErrHandling (Conc env)
 
 -- ** Env Mapping
@@ -478,7 +487,6 @@ instance EnvMapping Fx where
     Fx $ ReaderT $ \ (FxEnv unmask crash env) ->
       runReaderT m (FxEnv unmask crash (fn env))
 
-deriving instance EnvMapping Future
 deriving instance EnvMapping Conc
 
 
