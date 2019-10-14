@@ -1,6 +1,7 @@
 module Fx.Prelude
 ( 
   module Exports,
+  mapCompose,
 )
 where
 
@@ -29,6 +30,7 @@ import Data.Fixed as Exports
 import Data.Foldable as Exports
 import Data.Function as Exports hiding (id, (.))
 import Data.Functor as Exports
+import Data.Functor.Compose as Exports
 import Data.Functor.Contravariant as Exports
 import Data.Int as Exports
 import Data.IORef as Exports
@@ -95,3 +97,7 @@ import Control.Concurrent.STM as Exports
 -------------------------
 import Data.HashSet as Exports (HashSet)
 import Data.HashMap.Strict as Exports (HashMap)
+
+
+mapCompose :: (f (g a) -> f' (g' a')) -> Compose f g a -> Compose f' g' a'
+mapCompose fn (Compose m) = Compose (fn m)

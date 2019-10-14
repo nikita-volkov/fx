@@ -216,7 +216,7 @@ start (Fx m) =
         catch
           (do
             res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
-            return (atomically (putTMVar futureVar (Just res)))
+            return (atomically (putTMVar futureVar (first Just res)))
           )
           (\ exc -> return $ do
             case fromException exc of
@@ -224,12 +224,12 @@ start (Fx m) =
               Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
               -- Catch anything else we could miss. Just in case.
               _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
-            atomically (putTMVar futureVar Nothing)
+            atomically (putTMVar futureVar (Left Nothing))
           )
 
       finalize
 
-    return $ Future $ ExceptT $ MaybeT $ readTMVar futureVar
+    return $ Future $ Compose $ readTMVar futureVar
 
 {-|
 Block until the future completes either with a result or an error.
@@ -237,11 +237,11 @@ Block until the future completes either with a result or an error.
 wait :: Future err res -> Fx env err res
 wait (Future m) = Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $ join $ catch
   (do
-    futureStatus <- unmask (atomically (runMaybeT (runExceptT m)))
+    futureStatus <- unmask (atomically (getCompose m))
     return $ case futureStatus of
-      Just (Right res) -> return (Right res)
-      Just (Left err) -> return (Left err)
-      Nothing -> fail "Waiting for a future that crashed"
+      Right res -> return (Right res)
+      Left (Just err) -> return (Left err)
+      Left Nothing -> fail "Waiting for a future that crashed"
   )
   (\ (exc :: SomeException) -> return $ do
     crash [] (BugFxExceptionReason ("Failed waiting for result: " <> show exc))
@@ -292,11 +292,11 @@ Handle to a result of an action which may still be being calculated.
 
 The way you deal with it is thru the `start` and `wait` functions.
 -}
-newtype Future err res = Future (ExceptT err (MaybeT STM) res)
-  deriving (Functor, Applicative, Monad)
+newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
+  deriving (Functor, Applicative)
 
 instance Bifunctor Future where
-  bimap lf rf = mapFuture (mapExceptT (fmap (bimap lf rf)))
+  bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
 
 mapFuture fn (Future m) = Future (fn m)
 
@@ -459,13 +459,15 @@ instance ErrHandling (Fx env) where
         Fx m -> runExceptT (runReaderT m unmask)
 
 instance ErrHandling Future where
-  throwErr = Future . throwE
-  handleErr handler = mapFuture $ \ m -> ExceptT $ do
-    a <- runExceptT m
+  throwErr = Future . Compose . return . Left . Just
+  handleErr handler = mapFuture $ \ m -> Compose $ do
+    a <- getCompose m
     case a of
       Right res -> return (Right res)
-      Left err -> case handler err of
-        Future m' -> runExceptT m'
+      Left b -> case b of
+        Just err -> case handler err of
+          Future m' -> getCompose m'
+        Nothing -> return (Left Nothing)
 
 deriving instance ErrHandling (Conc env)
 
