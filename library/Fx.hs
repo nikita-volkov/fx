@@ -128,6 +128,7 @@ newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
+deriving instance Selective (Fx env err)
 deriving instance Monoid err => Alternative (Fx env err)
 deriving instance Monad (Fx env err)
 deriving instance Monoid err => MonadPlus (Fx env err)
@@ -301,6 +302,11 @@ The way you deal with it is thru the `start` and `wait` functions.
 newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
   deriving (Functor, Applicative)
 
+{-|
+Decides whether to wait for the result of another future.
+-}
+deriving instance Selective (Future err)
+
 instance Bifunctor Future where
   bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
 
@@ -328,6 +334,20 @@ instance Applicative (Conc env err) where
     res2 <- m2
     res1 <- wait future1
     return (res1 res2)
+
+{-|
+Spawns a computation,
+deciding whether to wait for it.
+-}
+instance Selective (Conc env err) where
+  select (Conc choose) (Conc act) = Conc $ do
+    actFtr <- start act
+    chooseRes <- choose
+    case chooseRes of
+      Left a -> do
+        aToB <- wait actFtr
+        return (aToB a)
+      Right b -> return b
 
 mapConc fn (Conc m) = Conc (fn m)
 

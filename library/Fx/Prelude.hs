@@ -55,7 +55,7 @@ import Foreign.ForeignPtr as Exports
 import Foreign.Ptr as Exports
 import Foreign.StablePtr as Exports
 import Foreign.Storable as Exports
-import GHC.Conc as Exports hiding (withMVar, threadWaitWriteSTM, threadWaitWrite, threadWaitReadSTM, threadWaitRead)
+import GHC.Conc as Exports hiding (orElse, withMVar, threadWaitWriteSTM, threadWaitWrite, threadWaitReadSTM, threadWaitRead)
 import GHC.Exts as Exports (lazy, inline, sortWith, groupWith)
 import GHC.Generics as Exports (Generic)
 import GHC.IO.Exception as Exports
@@ -91,12 +91,16 @@ import Data.Text as Exports (Text)
 
 -- stm
 -------------------------
-import Control.Concurrent.STM as Exports
+import Control.Concurrent.STM as Exports hiding (orElse)
 
 -- unordered-containers
 -------------------------
 import Data.HashSet as Exports (HashSet)
 import Data.HashMap.Strict as Exports (HashMap)
+
+-- selective
+-------------------------
+import Control.Selective as Exports
 
 
 mapCompose :: (f (g a) -> f' (g' a')) -> Compose f g a -> Compose f' g' a'
