@@ -294,7 +294,7 @@ handleEnv handler =
 -------------------------
 
 {-|
-Handle to a result of an action which may still be being calculated.
+Handle to a result of an action which may still be being executed on another thread.
 
 The way you deal with it is thru the `start` and `wait` functions.
 -}
