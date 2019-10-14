@@ -199,6 +199,12 @@ By fatal errors we mean calls to `error`, `fail` and uncaught exceptions.
 
 Normal errors (the explicit @err@ parameter) will only propagate
 if you use `wait` at some point.
+
+__Warning:__
+It is your responsibility to ensure that the whole future executes
+before the running `Fx` finishes.
+Otherwise you will lose the environment in scope of which the future executes.
+To achieve that use `wait`.
 -}
 start :: Fx env err res -> Fx env err' (Future err res)
 start (Fx m) =
