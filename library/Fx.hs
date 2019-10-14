@@ -126,11 +126,6 @@ Thus in effect it is the same as calling the `error` function.
 -}
 newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 
-{-|
-Runtime and application environment.
--}
-data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> FxExceptionReason -> IO ()) env
-
 deriving instance Functor (Fx env err)
 deriving instance Applicative (Fx env err)
 deriving instance Monoid err => Alternative (Fx env err)
@@ -147,6 +142,11 @@ instance MonadIO (Fx env SomeException) where
 
 instance Bifunctor (Fx env) where
   bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
+
+{-|
+Runtime and application environment.
+-}
+data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> FxExceptionReason -> IO ()) env
 
 mapFx fn (Fx m) = Fx (fn m)
 
