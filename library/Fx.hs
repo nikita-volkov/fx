@@ -181,7 +181,13 @@ __Warning:__
 It is your responsibility to ensure that it doesn't throw any other exceptions!
 -}
 runExceptionalIO :: Exception exc => IO res -> Fx env exc res
-runExceptionalIO io = runPartialIO (try io)
+runExceptionalIO io =
+  Fx $ ReaderT $ \ (FxEnv unmask crash _) -> ExceptT $
+  catch (fmap Right (unmask io)) $ \ exc -> case fromException exc of
+    Just exc' -> return (Left exc')
+    Nothing -> do
+      crash [] (UncaughtExceptionFxExceptionReason exc)
+      fail "Unhandled exception in runTotalIO. Got propagated to top."
 
 {-|
 Run STM, crashing in case of STM exceptions.
