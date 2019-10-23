@@ -46,6 +46,7 @@ where
 import Fx.Prelude hiding (app)
 import qualified Data.Text as Text
 import qualified Data.HashSet as HashSet
+import qualified Fx.Strings as Strings
 
 
 -- * IO
@@ -87,7 +88,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
             -- Catch calls to `error`.
             Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
             -- Catch anything else we could miss. Just in case.
-            _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
+            _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
           )
 
     -- Throw errors or post the result
@@ -110,9 +111,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
     (\ (exc :: SomeException) ->
       case fromException exc of
         Just (exc :: AsyncException) -> throwIO exc
-        _ ->
-          throwIO (FxException [] (BugFxExceptionReason
-            ("Failed waiting for final result: " <> show exc))))
+        _ -> throwIO (FxException [] (BugFxExceptionReason (Strings.failedWaitingForFinalResult exc))))
 
 
 -- * Fx
@@ -193,7 +192,7 @@ runExceptionalIO io =
     Just exc' -> return (Left exc')
     Nothing -> do
       crash [] (UncaughtExceptionFxExceptionReason exc)
-      fail "Unhandled exception in runTotalIO. Got propagated to top."
+      fail "Unhandled exception in runExceptionalIO. Got propagated to top."
 
 {-|
 Run STM, crashing in case of STM exceptions.
@@ -242,7 +241,7 @@ start (Fx m) =
               -- Catch calls to `error`.
               Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
               -- Catch anything else we could miss. Just in case.
-              _ -> crash [] (BugFxExceptionReason ("Unexpected exception: " <> show exc))
+              _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
             atomically (putTMVar futureVar (Left Nothing))
           )
 
@@ -263,7 +262,7 @@ wait (Future m) = Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $ join $ 
       Left Nothing -> fail "Waiting for a future that crashed"
   )
   (\ (exc :: SomeException) -> return $ do
-    crash [] (BugFxExceptionReason ("Failed waiting for result: " <> show exc))
+    crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
     fail "Thread crashed with uncaught exception waiting for result."
   )
 
@@ -546,10 +545,7 @@ the faulty thread and the reason of failure.
 data FxException = FxException [ThreadId] FxExceptionReason
 
 instance Show FxException where
-  show = let
-    showTids = intercalate "/" . fmap (drop 9 . show)
-    in \ (FxException tids reason) ->
-      "Fatal error at thread path /" <> showTids tids <> ". " <> show reason
+  show (FxException tids reason) = Strings.fatalErrorAtThreadPath tids (show reason)
 
 instance Exception FxException
 
@@ -563,9 +559,6 @@ data FxExceptionReason =
 
 instance Show FxExceptionReason where
   show = \ case
-    UncaughtExceptionFxExceptionReason exc -> 
-      "Uncaught exception. " <> show exc
-    ErrorCallFxExceptionReason errorCall -> 
-      show errorCall
-    BugFxExceptionReason details ->
-      "Bug in the \"fx\" library. Please report it to maintainers. " <> details
+    UncaughtExceptionFxExceptionReason exc -> Strings.uncaughtException exc
+    ErrorCallFxExceptionReason errorCall -> show errorCall
+    BugFxExceptionReason details -> Strings.bug details
