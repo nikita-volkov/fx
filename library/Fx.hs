@@ -75,7 +75,13 @@ runFxInIO (Fx m) = uninterruptibleMask $ \ unmask -> do
             resOrVoid <- runExceptT (runReaderT m fxEnv)
             return $ case resOrVoid of
               Right res -> atomically (putTMVar resVar res)
-              Left !_ -> crash [] (BugFxExceptionReason "Unexpected void")
+              Left a ->
+                catch
+                  (do
+                    evaluate a
+                    crash [] (BugFxExceptionReason "Unexpected void")
+                  )
+                  (crash [] . ErrorCallFxExceptionReason)
           )
           (\ exc -> return $ case fromException exc of
             -- Catch calls to `error`.
