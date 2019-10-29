@@ -295,11 +295,11 @@ This function leaks the abstraction over the environment.
 It is your responsibility to ensure that you don't use it to return
 the environment and use it outside of the handler's scope.
 -}
-handleEnv :: (env -> Fx () err res) -> Fx env err res
+handleEnv :: (env -> Fx env err res) -> Fx env err res
 handleEnv handler =
   Fx $ ReaderT $ \ (FxEnv unmask crash env) ->
     case handler env of
-      Fx rdr -> runReaderT rdr (FxEnv unmask crash ())
+      Fx rdr -> runReaderT rdr (FxEnv unmask crash env)
 
 
 -- * Future
