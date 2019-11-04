@@ -24,6 +24,7 @@ module Fx
   -- * Provider
   Provider,
   acquireAndRelease,
+  pool,
   -- * Future
   Future,
   -- * Conc
@@ -408,6 +409,33 @@ acquireAndRelease :: Fx () err env -> (env -> Fx () err ()) -> Provider err env
 acquireAndRelease acquire release = Provider $ do
   env <- acquire
   return (env, release env)
+
+{-|
+Convert a single resource provider into a pool provider.
+
+The wrapper provider acquires the specified amount of resources using the original provider,
+and returns a modified version of the original provider,
+whose acquisition and releasing merely takes one resource out of the pool and puts it back when done.
+
+Use this when you need to access a resource concurrently.
+-}
+pool :: Int -> Provider err env -> Provider err (Provider err env)
+pool poolSize (Provider acquire) = Provider $ do
+  queue <- runSTM newTQueue
+  replicateM_ poolSize $ do
+    handle <- mapEnv (const ()) acquire
+    runSTM $ writeTQueue queue handle    
+  let
+    resourceProvider = Provider $ do
+      (env, releaseResource) <- runSTM $ readTQueue queue
+      return (env, runSTM (writeTQueue queue (env, releaseResource)))
+    release = do
+      releasers <- runSTM $ do
+        list <- flushTQueue queue
+        guard (length list == poolSize)
+        return (fmap snd list)
+      sequence_ releasers
+    in return (resourceProvider, release)
 
 
 -- * Classes
