@@ -416,6 +416,8 @@ Convert a single resource provider into a pool provider.
 The wrapper provider acquires the specified amount of resources using the original provider,
 and returns a modified version of the original provider,
 whose acquisition and releasing merely takes one resource out of the pool and puts it back when done.
+No actual acquisition or releasing happens in the wrapped provider.
+No errors get raised in it either.
 
 Use this when you need to access a resource concurrently.
 -}
