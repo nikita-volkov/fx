@@ -419,11 +419,11 @@ whose acquisition and releasing merely takes one resource out of the pool and pu
 
 Use this when you need to access a resource concurrently.
 -}
-pool :: Int -> Provider err env -> Provider err (Provider err env)
+pool :: Int -> Provider err env -> Provider err (Provider err' env)
 pool poolSize (Provider acquire) = Provider $ do
   queue <- runSTM newTQueue
   replicateM_ poolSize $ do
-    handle <- mapEnv (const ()) acquire
+    handle <- acquire
     runSTM $ writeTQueue queue handle    
   let
     resourceProvider = Provider $ do
