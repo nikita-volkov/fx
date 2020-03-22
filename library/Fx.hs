@@ -451,8 +451,8 @@ Support for running of `Fx`.
 
 Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
 -}
-class FxRunning env err m | m -> env, m -> err where
-  runFx :: Fx env err res -> m res
+class FxRunning env err fx | fx -> env, fx -> err where
+  runFx :: Fx env err res -> fx res
 
 {-|
 Executes an effect with no environment and all errors handled.
@@ -490,18 +490,18 @@ Support for error handling.
 Functions provided by this class are particularly helpful,
 when you need to map into error of type `Void`.
 -}
-class ErrHandling m where
+class ErrHandling fx where
 
   {-|
   Interrupt the current computation raising an error.
   -}
-  throwErr :: err -> m err res
+  throwErr :: err -> fx err res
 
   {-|
   Handle error in another failing action.
   Sort of like a bind operation over the error type parameter.
   -}
-  handleErr :: (a -> m b res) -> m a res -> m b res
+  handleErr :: (a -> fx b res) -> fx a res -> fx b res
 
 {-|
 Expose the error in result,
@@ -544,12 +544,12 @@ deriving instance ErrHandling (Conc env)
 {-|
 Support for mapping of the environment.
 -}
-class EnvMapping m where
+class EnvMapping fx where
   {-|
   Map the environment.
   Please notice that the expected function is contravariant.
   -}
-  mapEnv :: (b -> a) -> m a err res -> m b err res
+  mapEnv :: (b -> a) -> fx a err res -> fx b err res
 
 instance EnvMapping Fx where
   mapEnv fn (Fx m) =
