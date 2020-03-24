@@ -2,9 +2,18 @@ module Fx
 (
   -- * Fx
   Fx,
+  -- ** Execution
+  FxRunning(..),
+  runFxHandling,
+  -- ** Error handling
+  ErrHandling(..),
+  mapErr,
+  exposeErr,
+  absorbErr,
   -- ** Environment handling
+  EnvMapping(..),
   provideAndUse,
-  handleEnv,
+  exposeEnv,
   -- ** Concurrency
   start,
   wait,
@@ -29,16 +38,6 @@ module Fx
   Future,
   -- * Conc
   Conc,
-  -- * Classes
-  -- ** FxRunning
-  FxRunning(..),
-  runFxHandling,
-  -- ** ErrHandling
-  ErrHandling(..),
-  exposeErr,
-  absorbErr,
-  -- ** EnvMapping
-  EnvMapping(..),
   -- * Exceptions
   FxException(..),
   FxExceptionReason(..),
@@ -290,18 +289,10 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
         return (resOrErr <* releasing)
 
 {-|
-Collapse an env handler into an environmental effect.
-
-__Warning:__
-This function leaks the abstraction over the environment.
-It is your responsibility to ensure that you don't use it to return
-the environment and use it outside of the handler's scope.
+Expose the environment.
 -}
-handleEnv :: (env -> Fx env err res) -> Fx env err res
-handleEnv handler =
-  Fx $ ReaderT $ \ (FxEnv unmask crash env) ->
-    case handler env of
-      Fx rdr -> runReaderT rdr (FxEnv unmask crash env)
+exposeEnv :: Fx env err env
+exposeEnv = Fx $ ReaderT $ \ (FxEnv _ _ env) -> return env
 
 
 -- * Future
@@ -509,6 +500,12 @@ class ErrHandling fx where
   Sort of like a bind operation over the error type parameter.
   -}
   handleErr :: (a -> fx b res) -> fx a res -> fx b res
+
+{-|
+Map the error.
+-}
+mapErr :: (ErrHandling m) => (a -> b) -> m a res -> m b res
+mapErr mapper = handleErr (throwErr . mapper)
 
 {-|
 Expose the error in result,
