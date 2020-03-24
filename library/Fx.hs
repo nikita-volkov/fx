@@ -32,6 +32,7 @@ module Fx
   -- * Classes
   -- ** FxRunning
   FxRunning(..),
+  runFxHandling,
   -- ** ErrHandling
   ErrHandling(..),
   exposeErr,
@@ -453,6 +454,12 @@ Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
 -}
 class FxRunning env err fx | fx -> env, fx -> err where
   runFx :: Fx env err res -> fx res
+
+{-|
+Run `Fx` handling its error in the context monad.
+-}
+runFxHandling :: (Monad m, FxRunning env Void m) => (err -> m a) -> Fx env err a -> m a
+runFxHandling handler fx = runFx (exposeErr fx) >>= either handler return
 
 {-|
 Executes an effect with no environment and all errors handled.
