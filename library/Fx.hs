@@ -13,6 +13,7 @@ module Fx
   -- ** Environment handling
   EnvMapping(..),
   provideAndUse,
+  exposeEnv,
   -- ** Concurrency
   start,
   wait,
@@ -291,6 +292,12 @@ closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
   Fx $ ReaderT $ \ (FxEnv unmask crash _) -> ExceptT $
   runExceptT (runReaderT fx (FxEnv unmask crash env))
+
+{-|
+Expose the environment.
+-}
+exposeEnv :: Fx env err env
+exposeEnv = Fx $ ReaderT $ \ (FxEnv _ _ env) -> return env
 
 
 -- * Future
