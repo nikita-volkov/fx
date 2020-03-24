@@ -287,6 +287,11 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
         releasing <- runExceptT (runReaderT release providerFxEnv)
         return (resOrErr <* releasing)
 
+closeEnv :: env -> Fx env err res -> Fx env' err res
+closeEnv env (Fx fx) =
+  Fx $ ReaderT $ \ (FxEnv unmask crash _) -> ExceptT $
+  runExceptT (runReaderT fx (FxEnv unmask crash env))
+
 
 -- * Future
 -------------------------
@@ -390,10 +395,10 @@ instance Bifunctor Provider where
 {-|
 Create a resource provider from acquiring and releasing effects.
 -}
-acquireAndRelease :: Fx () err env -> (env -> Fx () err ()) -> Provider err env
+acquireAndRelease :: Fx () err env -> Fx env err () -> Provider err env
 acquireAndRelease acquire release = Provider $ do
   env <- acquire
-  return (env, release env)
+  return (env, closeEnv env release)
 
 {-|
 Convert a single resource provider into a pool provider.
