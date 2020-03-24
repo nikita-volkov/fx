@@ -13,7 +13,6 @@ module Fx
   -- ** Environment handling
   EnvMapping(..),
   provideAndUse,
-  exposeEnv,
   -- ** Concurrency
   start,
   wait,
@@ -163,9 +162,9 @@ Turn a non-failing IO action into an effect.
 __Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
 -}
-runTotalIO :: IO res -> Fx env err res
-runTotalIO io = Fx $ ReaderT $ \ (FxEnv unmask crash _) -> lift $
-  catch (unmask io)
+runTotalIO :: (env -> IO res) -> Fx env err res
+runTotalIO io = Fx $ ReaderT $ \ (FxEnv unmask crash env) -> lift $
+  catch (unmask (io env))
     (\ (exc :: SomeException) -> do
       crash [] (UncaughtExceptionFxExceptionReason exc)
       fail "Unhandled exception in runTotalIO. Got propagated to top."
@@ -177,7 +176,7 @@ Run IO which produces either an error or result.
 __Warning:__
 It is your responsibility to ensure that it does not throw exceptions!
 -}
-runPartialIO :: IO (Either err res) -> Fx env err res
+runPartialIO :: (env -> IO (Either err res)) -> Fx env err res
 runPartialIO io = runTotalIO io >>= either throwErr return
 
 {-|
@@ -186,10 +185,10 @@ Run IO which only throws a specific type of exception.
 __Warning:__
 It is your responsibility to ensure that it doesn't throw any other exceptions!
 -}
-runExceptionalIO :: Exception exc => IO res -> Fx env exc res
+runExceptionalIO :: Exception exc => (env -> IO res) -> Fx env exc res
 runExceptionalIO io =
-  Fx $ ReaderT $ \ (FxEnv unmask crash _) -> ExceptT $
-  catch (fmap Right (unmask io)) $ \ exc -> case fromException exc of
+  Fx $ ReaderT $ \ (FxEnv unmask crash env) -> ExceptT $
+  catch (fmap Right (unmask (io env))) $ \ exc -> case fromException exc of
     Just exc' -> return (Left exc')
     Nothing -> do
       crash [] (UncaughtExceptionFxExceptionReason exc)
@@ -200,8 +199,8 @@ Run STM, crashing in case of STM exceptions.
 
 Same as @`runTotalIO` . `atomically`@.
 -}
-runSTM :: STM res -> Fx env err res
-runSTM = runTotalIO . atomically
+runSTM :: (env -> STM res) -> Fx env err res
+runSTM stm = runTotalIO (atomically . stm)
 
 {-|
 Spawn a thread and start running an effect on it,
@@ -287,12 +286,6 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
         resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
         releasing <- runExceptT (runReaderT release providerFxEnv)
         return (resOrErr <* releasing)
-
-{-|
-Expose the environment.
--}
-exposeEnv :: Fx env err env
-exposeEnv = Fx $ ReaderT $ \ (FxEnv _ _ env) -> return env
 
 
 -- * Future
@@ -415,16 +408,16 @@ Use this when you need to access a resource concurrently.
 -}
 pool :: Int -> Provider err env -> Provider err (Provider err' env)
 pool poolSize (Provider acquire) = Provider $ do
-  queue <- runSTM newTQueue
+  queue <- runSTM (const newTQueue)
   replicateM_ poolSize $ do
     handle <- acquire
-    runSTM $ writeTQueue queue handle    
+    runSTM $ const $ writeTQueue queue handle    
   let
     resourceProvider = Provider $ do
-      (env, releaseResource) <- runSTM $ readTQueue queue
-      return (env, runSTM (writeTQueue queue (env, releaseResource)))
+      (env, releaseResource) <- runSTM $ const $ readTQueue queue
+      return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
     release = do
-      releasers <- runSTM $ do
+      releasers <- runSTM $ const $ do
         list <- flushTQueue queue
         guard (length list == poolSize)
         return (fmap snd list)
