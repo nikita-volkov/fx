@@ -1,8 +1,6 @@
-module Fx.Strings
-where
+module Fx.Strings where
 
 import Fx.Prelude
-
 
 failedWaitingForFinalResult :: SomeException -> String
 failedWaitingForFinalResult exc =
@@ -21,13 +19,13 @@ uncaughtException exc =
   showString "Uncaught exception: " (show exc)
 
 fatalErrorAtThreadPath :: [ThreadId] -> String -> String
-fatalErrorAtThreadPath = let
-  showTids = intercalate "/" . fmap (drop 9 . show)
-  in \ tids reason ->
-    showString ("Fatal error at thread path /") $
-    showString (showTids tids) $
-    showString ". " $
-    reason
+fatalErrorAtThreadPath =
+  let showTids = intercalate "/" . fmap (drop 9 . show)
+   in \tids reason ->
+        showString ("Fatal error at thread path /") $
+          showString (showTids tids) $
+            showString ". " $
+              reason
 
 bug :: String -> String
 bug details =
