@@ -53,8 +53,6 @@ module Fx
   )
 where
 
-import qualified Data.HashSet as HashSet
-import qualified Data.Text as Text
 import Fx.Prelude hiding (app)
 import qualified Fx.Strings as Strings
 
@@ -71,7 +69,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
   fatalErrChan <- newTQueueIO
   resVar <- newEmptyTMVarIO
 
-  forkIO $ do
+  _ <- forkIO $ do
     tid <- myThreadId
 
     finalize <-
@@ -85,7 +83,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
                   Left a ->
                     catch
                       ( do
-                          evaluate a
+                          _ <- evaluate a
                           crash [] (BugFxExceptionReason "Unexpected void")
                       )
                       (crash [] . ErrorCallFxExceptionReason)
@@ -101,18 +99,18 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
     finalize
 
   -- Wait for fatal error or result
-  join $
-    catch
-      ( unmask $
-          atomically $
-            asum
-              [ do
-                  fatalErr <- readTQueue fatalErrChan
-                  return $ throwIO fatalErr,
-                do
-                  res <- readTMVar resVar
-                  return $ return res
-              ]
+  join
+    $ catch
+      ( unmask
+          $ atomically
+          $ asum
+            [ do
+                fatalErr <- readTQueue fatalErrChan
+                return $ throwIO fatalErr,
+              do
+                res <- readTMVar resVar
+                return $ return res
+            ]
       )
       ( \(exc :: SomeException) ->
           case fromException exc of
@@ -141,17 +139,16 @@ deriving instance Functor (Fx env err)
 
 deriving instance Applicative (Fx env err)
 
-deriving instance Selective (Fx env err)
-
-deriving instance Monoid err => Alternative (Fx env err)
+deriving instance (Monoid err) => Alternative (Fx env err)
 
 deriving instance Monad (Fx env err)
 
-deriving instance Monoid err => MonadPlus (Fx env err)
+deriving instance (Monoid err) => MonadPlus (Fx env err)
 
 instance MonadFail (Fx env err) where
-  fail msg = Fx $
-    ReaderT $ \(FxEnv _ crash _) -> liftIO $ do
+  fail msg = Fx
+    $ ReaderT
+    $ \(FxEnv _ crash _) -> liftIO $ do
       crash [] (ErrorCallFxExceptionReason (ErrorCall msg))
       fail "Crashed"
 
@@ -165,6 +162,12 @@ instance Bifunctor (Fx env) where
 -- Runtime and application environment.
 data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> FxExceptionReason -> IO ()) env
 
+mapFx ::
+  ( ReaderT (FxEnv env1) (ExceptT err1 IO) res1 ->
+    ReaderT (FxEnv env2) (ExceptT err2 IO) res2
+  ) ->
+  Fx env1 err1 res1 ->
+  Fx env2 err2 res2
 mapFx fn (Fx m) = Fx (fn m)
 
 -- |
@@ -173,10 +176,11 @@ mapFx fn (Fx m) = Fx (fn m)
 -- __Warning:__
 -- It is your responsibility to ensure that it does not throw exceptions!
 runTotalIO :: (env -> IO res) -> Fx env err res
-runTotalIO io = Fx $
-  ReaderT $ \(FxEnv unmask crash env) ->
-    lift $
-      catch
+runTotalIO io = Fx
+  $ ReaderT
+  $ \(FxEnv unmask crash env) ->
+    lift
+      $ catch
         (unmask (io env))
         ( \(exc :: SomeException) -> do
             crash [] (UncaughtExceptionFxExceptionReason exc)
@@ -196,11 +200,13 @@ runPartialIO io = runTotalIO io >>= either throwErr return
 --
 -- __Warning:__
 -- It is your responsibility to ensure that it doesn't throw any other exceptions!
-runExceptionalIO :: Exception exc => (env -> IO res) -> Fx env exc res
+runExceptionalIO :: (Exception exc) => (env -> IO res) -> Fx env exc res
 runExceptionalIO io =
-  Fx $
-    ReaderT $ \(FxEnv unmask crash env) -> ExceptT $
-      catch (fmap Right (unmask (io env))) $ \exc -> case fromException exc of
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash env) -> ExceptT
+      $ catch (fmap Right (unmask (io env)))
+      $ \exc -> case fromException exc of
         Just exc' -> return (Left exc')
         Nothing -> do
           crash [] (UncaughtExceptionFxExceptionReason exc)
@@ -230,11 +236,12 @@ runSTM stm = runTotalIO (atomically . stm)
 -- To achieve that use `wait`.
 start :: Fx env err res -> Fx env err' (Future err res)
 start (Fx m) =
-  Fx $
-    ReaderT $ \(FxEnv unmask crash env) -> lift $ do
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash env) -> lift $ do
       futureVar <- newEmptyTMVarIO
 
-      forkIO $ do
+      _ <- forkIO $ do
         tid <- myThreadId
 
         let childCrash tids dls = crash (tid : tids) dls
@@ -261,22 +268,23 @@ start (Fx m) =
 -- |
 -- Block until the future completes either with a result or an error.
 wait :: Future err res -> Fx env err res
-wait (Future m) = Fx $
-  ReaderT $ \(FxEnv unmask crash env) ->
-    ExceptT $
-      join $
-        catch
-          ( do
-              futureStatus <- unmask (atomically (getCompose m))
-              return $ case futureStatus of
-                Right res -> return (Right res)
-                Left (Just err) -> return (Left err)
-                Left Nothing -> fail "Waiting for a future that crashed"
-          )
-          ( \(exc :: SomeException) -> return $ do
-              crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
-              fail "Thread crashed with uncaught exception waiting for result."
-          )
+wait (Future m) = Fx
+  $ ReaderT
+  $ \(FxEnv unmask crash _) ->
+    ExceptT
+      $ join
+      $ catch
+        ( do
+            futureStatus <- unmask (atomically (getCompose m))
+            return $ case futureStatus of
+              Right res -> return (Right res)
+              Left (Just err) -> return (Left err)
+              Left Nothing -> fail "Waiting for a future that crashed"
+        )
+        ( \(exc :: SomeException) -> return $ do
+            crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
+            fail "Thread crashed with uncaught exception waiting for result."
+        )
 
 -- |
 -- Execute concurrent effects.
@@ -287,8 +295,9 @@ concurrently (Conc fx) = fx
 -- Execute Fx in the scope of a provided environment.
 provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
 provideAndUse (Provider (Fx acquire)) (Fx fx) =
-  Fx $
-    ReaderT $ \(FxEnv unmask crash _) -> ExceptT $ do
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash _) -> ExceptT $ do
       let providerFxEnv = FxEnv unmask crash ()
       acquisition <- runExceptT (runReaderT acquire providerFxEnv)
       case acquisition of
@@ -300,10 +309,11 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
 
 closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
-  Fx $
-    ReaderT $ \(FxEnv unmask crash _) ->
-      ExceptT $
-        runExceptT (runReaderT fx (FxEnv unmask crash env))
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash _) ->
+      ExceptT
+        $ runExceptT (runReaderT fx (FxEnv unmask crash env))
 
 -- |
 -- Expose the environment.
@@ -321,13 +331,15 @@ exposeEnv = Fx $ ReaderT $ \(FxEnv _ _ env) -> return env
 newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
   deriving (Functor, Applicative)
 
--- |
--- Decides whether to wait for the result of another future.
-deriving instance Selective (Future err)
-
 instance Bifunctor Future where
   bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
 
+mapFuture ::
+  ( Compose STM (Either (Maybe err1)) res1 ->
+    Compose STM (Either (Maybe err2)) res2
+  ) ->
+  Future err1 res1 ->
+  Future err2 res2
 mapFuture fn (Future m) = Future (fn m)
 
 -- * Conc
@@ -353,21 +365,6 @@ instance Applicative (Conc env err) where
     res1 <- wait future1
     return (res1 res2)
 
--- |
--- Spawns a computation,
--- deciding whether to wait for it.
-instance Selective (Conc env err) where
-  select (Conc choose) (Conc act) = Conc $ do
-    actFtr <- start act
-    chooseRes <- choose
-    case chooseRes of
-      Left a -> do
-        aToB <- wait actFtr
-        return (aToB a)
-      Right b -> return b
-
-mapConc fn (Conc m) = Conc (fn m)
-
 -- * Provider
 
 -------------------------
@@ -390,8 +387,8 @@ instance Functor (Provider err) where
 instance Applicative (Provider err) where
   pure env = Provider (pure (env, pure ()))
   Provider m1 <*> Provider m2 =
-    Provider $
-      liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
+    Provider
+      $ liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
 instance Monad (Provider err) where
   return = pure
@@ -434,8 +431,9 @@ pool poolSize (Provider acquire) = Provider $ do
         (env, releaseResource) <- runSTM $ const $ readTQueue queue
         return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
       release = do
-        releasers <- runSTM $
-          const $ do
+        releasers <- runSTM
+          $ const
+          $ do
             list <- flushTQueue queue
             guard (length list == poolSize)
             return (fmap snd list)
@@ -558,8 +556,9 @@ class EnvMapping fx where
 
 instance EnvMapping Fx where
   mapEnv fn (Fx m) =
-    Fx $
-      ReaderT $ \(FxEnv unmask crash env) ->
+    Fx
+      $ ReaderT
+      $ \(FxEnv unmask crash env) ->
         runReaderT m (FxEnv unmask crash (fn env))
 
 deriving instance EnvMapping Conc

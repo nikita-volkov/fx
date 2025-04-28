@@ -22,7 +22,6 @@ import Control.Monad.Trans.Maybe as Exports
 import Control.Monad.Trans.Reader as Exports (Reader, ReaderT (ReaderT), mapReader, mapReaderT, runReader, runReaderT, withReader, withReaderT)
 import Control.Monad.Trans.State.Strict as Exports (State, StateT (StateT), evalState, evalStateT, execState, execStateT, mapState, mapStateT, runState, runStateT, withState, withStateT)
 import Control.Monad.Trans.Writer.Strict as Exports (Writer, WriterT (..), execWriter, execWriterT, mapWriter, mapWriterT, runWriter)
-import Control.Selective as Exports
 import Data.Bifunctor as Exports
 import Data.Bits as Exports
 import Data.Bool as Exports
@@ -35,7 +34,7 @@ import Data.Either as Exports
 import Data.Fixed as Exports
 import Data.Foldable as Exports
 import Data.Function as Exports hiding (id, (.))
-import Data.Functor as Exports
+import Data.Functor as Exports hiding (unzip)
 import Data.Functor.Compose as Exports
 import Data.Functor.Contravariant as Exports
 import Data.HashMap.Strict as Exports (HashMap)
@@ -77,8 +76,6 @@ import System.IO.Unsafe as Exports
 import System.Mem as Exports
 import System.Mem.StableName as Exports
 import System.Timeout as Exports
-import Text.ParserCombinators.ReadP as Exports (ReadP, ReadS, readP_to_S, readS_to_P)
-import Text.ParserCombinators.ReadPrec as Exports (ReadPrec, readP_to_Prec, readPrec_to_P, readPrec_to_S, readS_to_Prec)
 import Text.Printf as Exports (hPrintf, printf)
 import Text.Read as Exports (Read (..), readEither, readMaybe)
 import Unsafe.Coerce as Exports

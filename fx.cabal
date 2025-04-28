@@ -1,3 +1,4 @@
+cabal-version: 3.0
 name: fx
 version: 0.5
 synopsis: Revamped effect system
@@ -9,8 +10,6 @@ maintainer: Nikita Volkov <nikita.y.volkov@mail.ru>
 copyright: (c) 2019 Nikita Volkov
 license: MIT
 license-file: LICENSE
-build-type: Simple
-cabal-version: >=1.10
 
 source-repository head
   type: git
@@ -18,32 +17,86 @@ source-repository head
 
 library
   hs-source-dirs: library
-  default-extensions: BangPatterns, ConstraintKinds, DataKinds, DefaultSignatures, DeriveDataTypeable, DeriveFoldable, DeriveFunctor, DeriveGeneric, DeriveTraversable, EmptyDataDecls, FlexibleContexts, FlexibleInstances, FunctionalDependencies, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, LambdaCase, LiberalTypeSynonyms, MagicHash, MultiParamTypeClasses, MultiWayIf, NoImplicitPrelude, NoMonomorphismRestriction, OverloadedStrings, PatternGuards, ParallelListComp, QuasiQuotes, RankNTypes, RecordWildCards, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, UnboxedTuples
+  default-extensions:
+    BangPatterns
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveTraversable
+    EmptyDataDecls
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    GeneralizedNewtypeDeriving
+    InstanceSigs
+    LambdaCase
+    LiberalTypeSynonyms
+    MagicHash
+    MultiParamTypeClasses
+    MultiWayIf
+    NoImplicitPrelude
+    NoMonomorphismRestriction
+    OverloadedStrings
+    ParallelListComp
+    PatternGuards
+    QuasiQuotes
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UnboxedTuples
+
   default-language: Haskell2010
   exposed-modules:
     Fx
+
   other-modules:
     Fx.Prelude
     Fx.Strings
+
   build-depends:
     base >=4.9 && <5,
-    selective >=0.4 && <0.6,
     stm >=2.5 && <3,
     text >=1 && <3,
-    transformers >=0.5 && <0.7,
-    unordered-containers >=0.2.10 && <0.3
+    transformers >=0.5 && <0.8,
+    unordered-containers >=0.2.10 && <0.3,
 
 test-suite test
   type: exitcode-stdio-1.0
   hs-source-dirs: test
-  default-extensions: BangPatterns, DeriveDataTypeable, DeriveGeneric, DeriveFunctor, DeriveTraversable, FlexibleContexts, FlexibleInstances, LambdaCase, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies
+  default-extensions:
+    BangPatterns
+    DeriveDataTypeable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveTraversable
+    FlexibleContexts
+    FlexibleInstances
+    LambdaCase
+    NoImplicitPrelude
+    RankNTypes
+    ScopedTypeVariables
+    StandaloneDeriving
+    TypeApplications
+    TypeFamilies
+
   default-language: Haskell2010
   main-is: Main.hs
   build-depends:
-    fx,
     QuickCheck >=2.13 && <3,
+    fx,
     quickcheck-instances >=0.3.22 && <0.4,
     rerebase <2,
     tasty >=1.2.3 && <2,
     tasty-hunit >=0.10.0.2 && <0.11,
-    tasty-quickcheck >=0.10.1 && <0.11
+    tasty-quickcheck >=0.10.1 && <0.11,
