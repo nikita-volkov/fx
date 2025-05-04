@@ -13,7 +13,7 @@ license-file: LICENSE
 
 source-repository head
   type: git
-  location: git://github.com/nikita-volkov/fx.git
+  location: https://github.com/nikita-volkov/fx
 
 library
   hs-source-dirs: library
@@ -93,10 +93,7 @@ test-suite test
   default-language: Haskell2010
   main-is: Main.hs
   build-depends:
-    QuickCheck >=2.13 && <3,
     fx,
-    quickcheck-instances >=0.3.22 && <0.4,
     rerebase <2,
     tasty >=1.2.3 && <2,
     tasty-hunit >=0.10.0.2 && <0.11,
-    tasty-quickcheck >=0.10.1 && <0.11,
