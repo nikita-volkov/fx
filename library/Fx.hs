@@ -157,7 +157,14 @@ instance Bifunctor (Fx env) where
 
 -- |
 -- Runtime and application environment.
-data FxEnv env = FxEnv (forall a. IO a -> IO a) ([ThreadId] -> FxExceptionReason -> IO ()) env
+data FxEnv env
+  = FxEnv
+      -- | Unmasking function.
+      (forall a. IO a -> IO a)
+      -- | Crash.
+      ([ThreadId] -> FxExceptionReason -> IO ())
+      -- | User environment.
+      env
 
 mapFx ::
   ( ReaderT (FxEnv env1) (ExceptT err1 IO) res1 ->
