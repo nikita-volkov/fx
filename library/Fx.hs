@@ -44,9 +44,6 @@ module Fx
     -- * Future
     Future,
 
-    -- * Conc
-    Conc,
-
     -- * Exceptions
     FxException (..),
     FxExceptionReason (..),
@@ -287,9 +284,22 @@ wait (Future m) = Fx
         )
 
 -- |
--- Execute concurrent effects.
-concurrently :: Conc env err res -> Fx env err res
-concurrently (Conc fx) = fx
+-- Execute concurrent effects by composing them applicatively.
+--
+-- E.g.,
+--
+-- > selectDataById :: Int64 -> Fx env err (Metadata, File)
+-- > selectDataById id =
+-- >   concurrently $ \lift ->
+-- >     (,)
+-- >       <$> lift (selectMetadataById id)
+-- >       <*> lift (getFileById id)
+concurrently ::
+  (forall f. (Applicative f) => (forall x. Fx env err x -> f x) -> f res) ->
+  Fx env err res
+concurrently buildApplicative =
+  case buildApplicative Conc of
+    Conc fx -> fx
 
 -- |
 -- Execute Fx in the scope of a provided environment.
