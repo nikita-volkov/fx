@@ -13,8 +13,8 @@ module Fx
     absorbErr,
 
     -- ** Environment handling
-    EnvMapping (..),
     provideAndUse,
+    mapEnv,
     exposeEnv,
 
     -- ** Concurrency
@@ -337,6 +337,16 @@ closeEnv env (Fx fx) =
 exposeEnv :: Fx env err env
 exposeEnv = Fx $ ReaderT $ \(FxEnv _ _ env) -> return env
 
+-- |
+-- Map the environment.
+-- Please notice that the expected function is contravariant.
+mapEnv :: (b -> a) -> Fx a err res -> Fx b err res
+mapEnv fn (Fx m) =
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash env) ->
+      runReaderT m (FxEnv unmask crash (fn env))
+
 -- * Future
 
 -------------------------
@@ -558,27 +568,6 @@ instance ErrHandling Future where
         Nothing -> return (Left Nothing)
 
 deriving instance ErrHandling (Conc env)
-
--- ** Env Mapping
-
--------------------------
-
--- |
--- Support for mapping of the environment.
-class EnvMapping fx where
-  -- |
-  --  Map the environment.
-  --  Please notice that the expected function is contravariant.
-  mapEnv :: (b -> a) -> fx a err res -> fx b err res
-
-instance EnvMapping Fx where
-  mapEnv fn (Fx m) =
-    Fx
-      $ ReaderT
-      $ \(FxEnv unmask crash env) ->
-        runReaderT m (FxEnv unmask crash (fn env))
-
-deriving instance EnvMapping Conc
 
 -- * Exceptions
 
