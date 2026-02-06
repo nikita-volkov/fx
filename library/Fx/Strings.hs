@@ -22,10 +22,10 @@ fatalErrorAtThreadPath :: [ThreadId] -> String -> String
 fatalErrorAtThreadPath =
   let showTids = intercalate "/" . fmap (drop 9 . show)
    in \tids reason ->
-        showString ("Fatal error at thread path /")
-          $ showString (showTids tids)
-          $ showString ". "
-          $ reason
+        showString ("Fatal error at thread path /") $
+          showString (showTids tids) $
+            showString ". " $
+              reason
 
 bug :: String -> String
 bug details =
