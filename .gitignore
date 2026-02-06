@@ -12,6 +12,7 @@
 !/README.md
 !/CHANGELOG.md
 !/*.cabal
+!.ormolu
 
 # Unignore subtrees:
 !/.github/
