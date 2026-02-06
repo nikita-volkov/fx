@@ -126,7 +126,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
 -- `fail` is intended to be used in events which you expect never to happen,
 -- and hence which should be considered bugs.
 -- It is similar to calling `fail` on IO,
--- with a major difference of the error never getting lost in a concurrent environment.
+-- with a major difference of the error never getting lost in a concurrent setting.
 --
 -- Calling `fail` results in `ErrorCallFxExceptionReason` in the triggerred `FxException`.
 -- Thus in effect it is the same as calling the `error` function.
