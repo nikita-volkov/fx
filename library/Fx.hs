@@ -301,10 +301,10 @@ wait (Future m) = Fx $
 -- >       <$> lift (selectMetadataById id)
 -- >       <*> lift (getFileById id)
 concurrently ::
-  (forall f. (Applicative f) => (forall x. Fx env err x -> f x) -> f res) ->
+  (forall f. (Alternative f) => (forall x. Fx env err x -> f x) -> f res) ->
   Fx env err res
-concurrently buildApplicative =
-  case buildApplicative Conc of
+concurrently build =
+  case build Conc of
     Conc fx -> fx
 
 -- |
@@ -350,7 +350,7 @@ mapEnv fn (Fx m) =
 --
 -- The way you deal with it is thru the `start` and `wait` functions.
 newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
-  deriving (Functor, Applicative)
+  deriving (Functor, Applicative, Alternative)
 
 instance Bifunctor Future where
   bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
@@ -385,6 +385,14 @@ instance Applicative (Conc env err) where
     res2 <- m2
     res1 <- wait future1
     return (res1 res2)
+
+instance Alternative (Conc env err) where
+  empty = Conc do
+    wait empty
+  (<|>) (Conc m1) (Conc m2) = Conc $ do
+    future1 <- start m1
+    future2 <- start m2
+    wait (future1 <|> future2)
 
 -- * With
 
