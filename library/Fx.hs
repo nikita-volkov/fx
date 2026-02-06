@@ -1,10 +1,10 @@
 module Fx
-  ( -- * Fx
-    Fx,
-
-    -- ** Execution
+  ( -- * Execution
     RunsFx (..),
     runFxHandling,
+
+    -- * Fx
+    Fx,
 
     -- ** Environment handling
     with,
@@ -18,7 +18,7 @@ module Fx
     -- |
     -- These functions leak abstraction in one way or the other,
     -- requiring you to ensure that your code doesn't throw unexpected exceptions.
-    -- `try` are `catch` are your tools for that.
+    -- `try` and `catch` are your tools for that.
     --
     -- Besides these functions `Fx` also has an instance of `MonadIO`,
     -- which provides the only non-leaky way of running IO, catching all possible exceptions.
