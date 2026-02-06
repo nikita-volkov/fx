@@ -36,7 +36,8 @@ module Fx
 
     -- * With
     With,
-    acquireAndRelease,
+    acquire,
+    withRelease,
     pool,
 
     -- * Exceptions
@@ -426,11 +427,25 @@ instance Bifunctor With where
   second = fmap
 
 -- |
--- Create a resource provider from acquiring and releasing effects.
-acquireAndRelease :: Fx () err env -> Fx env err () -> With err env
-acquireAndRelease acquire release = With $ do
+-- Create a resource provider from an acquiring effect.
+--
+-- To add a release action, use 'withRelease'.
+acquire :: Fx () err env -> With err env
+acquire acquire = With do
   env <- acquire
-  return (env, closeEnv env release)
+  return (env, pure ())
+
+-- |
+-- Add a release action to an existing resource provider.
+--
+-- Example:
+--
+-- > fileWith :: With err Handle
+-- > fileWith = withRelease closeHandle (acquire openFile)
+withRelease :: Fx env err () -> With err env -> With err env
+withRelease release (With m) = With $ do
+  (env, existingRelease) <- m
+  return (env, existingRelease >> closeEnv env release)
 
 -- |
 -- Convert a single resource provider into a pool provider.
