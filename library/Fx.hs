@@ -10,6 +10,13 @@ module Fx
     with,
     mapEnv,
 
+    -- ** Error handling
+    throwErr,
+    handleErr,
+    mapErr,
+    exposeErr,
+    absorbErr,
+
     -- ** Concurrency
     concurrently,
 
@@ -26,13 +33,6 @@ module Fx
     runPartialIO,
     runExceptionalIO,
     runSTM,
-
-    -- ** Error handling
-    throwErr,
-    handleErr,
-    mapErr,
-    exposeErr,
-    absorbErr,
 
     -- * With
     With,
