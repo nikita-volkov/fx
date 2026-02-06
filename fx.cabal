@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name: fx
 version: 0.5
 synopsis: Revamped effect system
@@ -19,6 +19,7 @@ library
   hs-source-dirs: library
   default-extensions:
     BangPatterns
+    BlockArguments
     ConstraintKinds
     DataKinds
     DefaultSignatures
@@ -27,6 +28,8 @@ library
     DeriveFunctor
     DeriveGeneric
     DeriveTraversable
+    DerivingStrategies
+    DerivingVia
     EmptyDataDecls
     FlexibleContexts
     FlexibleInstances
