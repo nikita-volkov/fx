@@ -6,20 +6,11 @@ module Fx
     RunsFx (..),
     runFxHandling,
 
-    -- ** Error handling
-    throwErr,
-    handleErr,
-    mapErr,
-    exposeErr,
-    absorbErr,
-
     -- ** Environment handling
     provideAndUse,
     mapEnv,
 
     -- ** Concurrency
-    start,
-    wait,
     concurrently,
 
     -- ** IO execution
@@ -36,13 +27,17 @@ module Fx
     runExceptionalIO,
     runSTM,
 
+    -- ** Error handling
+    throwErr,
+    handleErr,
+    mapErr,
+    exposeErr,
+    absorbErr,
+
     -- * Provider
     Provider,
     acquireAndRelease,
     pool,
-
-    -- * Future
-    Future,
 
     -- * Exceptions
     FxException (..),
