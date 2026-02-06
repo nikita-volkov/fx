@@ -411,16 +411,6 @@ instance Applicative (With err) where
     With $
       liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
-instance Monad (With err) where
-  return = pure
-  (>>=) (With m1) k2 = With $ do
-    (env1, release1) <- m1
-    (env2, release2) <- case k2 env1 of With m2 -> m2
-    return (env2, release2 >> release1)
-
-instance MonadIO (With SomeException) where
-  liftIO = runFx . liftIO
-
 instance Bifunctor With where
   bimap lf rf (With m) = With (bimap lf (bimap rf (first lf)) m)
   second = fmap
