@@ -37,8 +37,6 @@ import Data.Function as Exports hiding (id, (.))
 import Data.Functor as Exports hiding (unzip)
 import Data.Functor.Compose as Exports
 import Data.Functor.Contravariant as Exports
-import Data.HashMap.Strict as Exports (HashMap)
-import Data.HashSet as Exports (HashSet)
 import Data.IORef as Exports
 import Data.Int as Exports
 import Data.Ix as Exports
