@@ -475,13 +475,8 @@ instance RunsFx () err (ExceptT err IO) where
 instance RunsFx env err (ReaderT env (ExceptT err IO)) where
   runFx fx = ReaderT (\env -> ExceptT (runFx (mapEnv (const env) (exposeErr fx))))
 
--- |
--- Executes an effect with no environment and all errors handled in `Fx`
--- with any environment and error.
---
--- Same as @(`mapEnv` (`const` ()) . `first` `absurd`)@.
-instance RunsFx () Void (Fx env err) where
-  runFx = mapEnv (const ()) . first absurd
+instance RunsFx env err (Fx env err) where
+  runFx = id
 
 instance RunsFx env err (Conc env err) where
   runFx = Conc
