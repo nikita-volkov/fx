@@ -1,25 +1,17 @@
 module Fx
-  ( -- * Fx
-    Fx,
-
-    -- ** Execution
-    FxRunning (..),
+  ( -- * Execution
+    RunsFx (..),
     runFxHandling,
 
-    -- ** Error handling
-    ErrHandling (..),
-    mapErr,
-    exposeErr,
-    absorbErr,
+    -- * Fx
+    Fx,
 
     -- ** Environment handling
-    EnvMapping (..),
-    provideAndUse,
-    exposeEnv,
+    with,
+    withPoolOf,
+    mapEnv,
 
     -- ** Concurrency
-    start,
-    wait,
     concurrently,
 
     -- ** IO execution
@@ -27,7 +19,7 @@ module Fx
     -- |
     -- These functions leak abstraction in one way or the other,
     -- requiring you to ensure that your code doesn't throw unexpected exceptions.
-    -- `try` are `catch` are your tools for that.
+    -- `try` and `catch` are your tools for that.
     --
     -- Besides these functions `Fx` also has an instance of `MonadIO`,
     -- which provides the only non-leaky way of running IO, catching all possible exceptions.
@@ -36,13 +28,17 @@ module Fx
     runExceptionalIO,
     runSTM,
 
-    -- * Provider
-    Provider,
-    acquireAndRelease,
-    pool,
+    -- ** Error handling
+    throwErr,
+    handleErr,
+    mapErr,
+    exposeErr,
+    absorbErr,
 
-    -- * Future
-    Future,
+    -- * With
+    With,
+    acquire,
+    withRelease,
 
     -- * Exceptions
     FxException (..),
@@ -151,6 +147,10 @@ instance MonadFail (Fx env err) where
 
 instance MonadIO (Fx env SomeException) where
   liftIO io = Fx (ReaderT (\(FxEnv unmask _ _) -> ExceptT (try (unmask io))))
+
+instance MonadError err (Fx env err) where
+  throwError = throwErr
+  catchError = flip handleErr
 
 instance Bifunctor (Fx env) where
   bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
@@ -310,8 +310,8 @@ concurrently buildApplicative =
 
 -- |
 -- Execute Fx in the scope of a provided environment.
-provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
-provideAndUse (Provider (Fx acquire)) (Fx fx) =
+with :: With err env -> Fx env err res -> Fx env' err res
+with (With (Fx acquire)) (Fx fx) =
   Fx
     $ ReaderT
     $ \(FxEnv unmask crash _) -> ExceptT $ do
@@ -324,6 +324,14 @@ provideAndUse (Provider (Fx acquire)) (Fx fx) =
           releasing <- runExceptT (runReaderT release providerFxEnv)
           return (resOrErr <* releasing)
 
+-- |
+-- Execute Fx in the scope of a pool of resources.
+withPoolOf :: Int -> With err env -> Fx env err res -> Fx env' err res
+withPoolOf poolSize theWith fx =
+  with (pool poolSize theWith) do
+    poolWith <- exposeEnv
+    with poolWith fx
+
 closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
   Fx
@@ -331,6 +339,16 @@ closeEnv env (Fx fx) =
     $ \(FxEnv unmask crash _) ->
       ExceptT
         $ runExceptT (runReaderT fx (FxEnv unmask crash env))
+
+-- |
+-- Map the environment.
+-- Please notice that the expected function is contravariant.
+mapEnv :: (b -> a) -> Fx a err res -> Fx b err res
+mapEnv fn (Fx m) =
+  Fx
+    $ ReaderT
+    $ \(FxEnv unmask crash env) ->
+      runReaderT m (FxEnv unmask crash (fn env))
 
 -- |
 -- Expose the environment.
@@ -382,7 +400,7 @@ instance Applicative (Conc env err) where
     res1 <- wait future1
     return (res1 res2)
 
--- * Provider
+-- * With
 
 -------------------------
 
@@ -394,39 +412,53 @@ instance Applicative (Conc env err) where
 --
 -- Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -- and later released as the \"managed\" package.
-newtype Provider err env = Provider (Fx () err (env, Fx () err ()))
+newtype With err env = With (Fx () err (env, Fx () err ()))
 
-instance Functor (Provider err) where
-  fmap f (Provider m) = Provider $ do
+instance Functor (With err) where
+  fmap f (With m) = With $ do
     (env, release) <- m
     return (f env, release)
 
-instance Applicative (Provider err) where
-  pure env = Provider (pure (env, pure ()))
-  Provider m1 <*> Provider m2 =
-    Provider
+instance Applicative (With err) where
+  pure env = With (pure (env, pure ()))
+  With m1 <*> With m2 =
+    With
       $ liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
-instance Monad (Provider err) where
+instance Monad (With err) where
   return = pure
-  (>>=) (Provider m1) k2 = Provider $ do
+  (>>=) (With m1) k2 = With $ do
     (env1, release1) <- m1
-    (env2, release2) <- case k2 env1 of Provider m2 -> m2
+    (env2, release2) <- case k2 env1 of With m2 -> m2
     return (env2, release2 >> release1)
 
-instance MonadIO (Provider SomeException) where
+instance MonadIO (With SomeException) where
   liftIO = runFx . liftIO
 
-instance Bifunctor Provider where
-  bimap lf rf (Provider m) = Provider (bimap lf (bimap rf (first lf)) m)
+instance Bifunctor With where
+  bimap lf rf (With m) = With (bimap lf (bimap rf (first lf)) m)
   second = fmap
 
 -- |
--- Create a resource provider from acquiring and releasing effects.
-acquireAndRelease :: Fx () err env -> Fx env err () -> Provider err env
-acquireAndRelease acquire release = Provider $ do
+-- Create a resource provider from an acquiring effect.
+--
+-- To add a release action, use 'withRelease'.
+acquire :: Fx () err env -> With err env
+acquire acquire = With do
   env <- acquire
-  return (env, closeEnv env release)
+  return (env, pure ())
+
+-- |
+-- Add a release action to an existing resource provider.
+--
+-- Example:
+--
+-- > fileWith :: With err Handle
+-- > fileWith = withRelease closeHandle (acquire openFile)
+withRelease :: Fx env err () -> With err env -> With err env
+withRelease release (With m) = With $ do
+  (env, existingRelease) <- m
+  return (env, existingRelease >> closeEnv env release)
 
 -- |
 -- Convert a single resource provider into a pool provider.
@@ -438,13 +470,13 @@ acquireAndRelease acquire release = Provider $ do
 -- No errors get raised in it either.
 --
 -- Use this when you need to access a resource concurrently.
-pool :: Int -> Provider err env -> Provider err (Provider err' env)
-pool poolSize (Provider acquire) = Provider $ do
+pool :: Int -> With err env -> With err (With err' env)
+pool poolSize (With acquire) = With $ do
   queue <- runSTM (const newTQueue)
   replicateM_ poolSize $ do
     handle <- acquire
     runSTM $ const $ writeTQueue queue handle
-  let resourceProvider = Provider $ do
+  let resourceWith = With $ do
         (env, releaseResource) <- runSTM $ const $ readTQueue queue
         return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
       release = do
@@ -455,7 +487,7 @@ pool poolSize (Provider acquire) = Provider $ do
             guard (length list == poolSize)
             return (fmap snd list)
         sequence_ releasers
-   in return (resourceProvider, release)
+   in return (resourceWith, release)
 
 -- * Classes
 
@@ -468,24 +500,24 @@ pool poolSize (Provider acquire) = Provider $ do
 -- |
 -- Support for running of `Fx`.
 --
--- Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
-class FxRunning env err fx | fx -> env, fx -> err where
-  runFx :: Fx env err res -> fx res
+-- Apart from other things this is your interface to turn `Fx` into `IO`.
+class RunsFx env err m | m -> env, m -> err where
+  runFx :: Fx env err res -> m res
 
 -- |
 -- Run `Fx` handling its error in the context monad.
-runFxHandling :: (Monad m, FxRunning env Void m) => (err -> m a) -> Fx env err a -> m a
+runFxHandling :: (Monad m, RunsFx env Void m) => (err -> m a) -> Fx env err a -> m a
 runFxHandling handler fx = runFx (exposeErr fx) >>= either handler return
 
 -- |
 -- Executes an effect with no environment and all errors handled.
-instance FxRunning () Void IO where
+instance RunsFx () Void IO where
   runFx = runFxInIO
 
-instance FxRunning () err (ExceptT err IO) where
+instance RunsFx () err (ExceptT err IO) where
   runFx fx = ExceptT (runFx (exposeErr fx))
 
-instance FxRunning env err (ReaderT env (ExceptT err IO)) where
+instance RunsFx env err (ReaderT env (ExceptT err IO)) where
   runFx fx = ReaderT (\env -> ExceptT (runFx (mapEnv (const env) (exposeErr fx))))
 
 -- |
@@ -493,92 +525,56 @@ instance FxRunning env err (ReaderT env (ExceptT err IO)) where
 -- with any environment and error.
 --
 -- Same as @(`mapEnv` (`const` ()) . `first` `absurd`)@.
-instance FxRunning () Void (Fx env err) where
+instance RunsFx () Void (Fx env err) where
   runFx = mapEnv (const ()) . first absurd
 
-instance FxRunning env err (Conc env err) where
+instance RunsFx env err (Conc env err) where
   runFx = Conc
 
-instance FxRunning () err (Provider err) where
-  runFx fx = Provider (fmap (\env -> (env, pure ())) fx)
+instance RunsFx () err (With err) where
+  runFx fx = With (fmap (\env -> (env, pure ())) fx)
 
--- ** ErrHandling
+-- ** Error Handling
 
 -------------------------
 
 -- |
--- Support for error handling.
+-- Interrupt the current computation raising an error.
 --
--- Functions provided by this class are particularly helpful,
--- when you need to map into error of type `Void`.
-class ErrHandling fx where
-  -- |
-  --  Interrupt the current computation raising an error.
-  throwErr :: err -> fx err res
+-- Same as `throwError` of `MonadError`.
+throwErr :: err -> Fx env err res
+throwErr = Fx . lift . throwE
 
-  -- |
-  --  Handle error in another failing action.
-  --  Sort of like a bind operation over the error type parameter.
-  handleErr :: (a -> fx b res) -> fx a res -> fx b res
+-- |
+-- Handle error in another failing action.
+-- Sort of like a bind operation over the error type parameter.
+--
+-- Similar to `handleError` of `MonadError` but allows changing the error type.
+handleErr :: (a -> Fx env b res) -> Fx env a res -> Fx env b res
+handleErr handler = mapFx $ \m -> ReaderT $ \unmask -> ExceptT $ do
+  a <- runExceptT (runReaderT m unmask)
+  case a of
+    Right res -> return (Right res)
+    Left err -> case handler err of
+      Fx m -> runExceptT (runReaderT m unmask)
 
 -- |
 -- Map the error.
-mapErr :: (ErrHandling m) => (a -> b) -> m a res -> m b res
+mapErr :: (a -> b) -> Fx env a res -> Fx env b res
 mapErr mapper = handleErr (throwErr . mapper)
 
 -- |
 -- Expose the error in result,
 -- producing an action, which is compatible with any error type.
-exposeErr :: (ErrHandling m, Functor (m a), Applicative (m b)) => m a res -> m b (Either a res)
+--
+-- Almost the same as `tryError` of `MonadError`, but allows changing the error type.
+exposeErr :: Fx env a res -> Fx env b (Either a res)
 exposeErr = absorbErr Left . fmap Right
 
 -- |
 -- Map from error to result, leaving the error be anything.
-absorbErr :: (ErrHandling m, Applicative (m b)) => (a -> res) -> m a res -> m b res
+absorbErr :: (a -> res) -> Fx env a res -> Fx env b res
 absorbErr fn = handleErr (pure . fn)
-
-instance ErrHandling (Fx env) where
-  throwErr = Fx . lift . throwE
-  handleErr handler = mapFx $ \m -> ReaderT $ \unmask -> ExceptT $ do
-    a <- runExceptT (runReaderT m unmask)
-    case a of
-      Right res -> return (Right res)
-      Left err -> case handler err of
-        Fx m -> runExceptT (runReaderT m unmask)
-
-instance ErrHandling Future where
-  throwErr = Future . Compose . return . Left . Just
-  handleErr handler = mapFuture $ \m -> Compose $ do
-    a <- getCompose m
-    case a of
-      Right res -> return (Right res)
-      Left b -> case b of
-        Just err -> case handler err of
-          Future m' -> getCompose m'
-        Nothing -> return (Left Nothing)
-
-deriving instance ErrHandling (Conc env)
-
--- ** Env Mapping
-
--------------------------
-
--- |
--- Support for mapping of the environment.
-class EnvMapping fx where
-  -- |
-  --  Map the environment.
-  --  Please notice that the expected function is contravariant.
-  mapEnv :: (b -> a) -> fx a err res -> fx b err res
-
-instance EnvMapping Fx where
-  mapEnv fn (Fx m) =
-    Fx
-      $ ReaderT
-      $ \(FxEnv unmask crash env) ->
-        runReaderT m (FxEnv unmask crash (fn env))
-
-deriving instance EnvMapping Conc
 
 -- * Exceptions
 
