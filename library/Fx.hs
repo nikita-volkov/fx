@@ -1,10 +1,10 @@
 module Fx
-  ( -- * Execution
+  ( -- * Fx
+    Fx,
+
+    -- ** Execution
     RunsFx (..),
     runFxHandling,
-
-    -- * Fx
-    Fx,
 
     -- ** Environment handling
     with,
@@ -92,18 +92,18 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
     finalize
 
   -- Wait for fatal error or result
-  join
-    $ catch
-      ( unmask
-          $ atomically
-          $ asum
-            [ do
-                fatalErr <- readTQueue fatalErrChan
-                return $ throwIO fatalErr,
-              do
-                res <- readTMVar resVar
-                return $ return res
-            ]
+  join $
+    catch
+      ( unmask $
+          atomically $
+            asum
+              [ do
+                  fatalErr <- readTQueue fatalErrChan
+                  return $ throwIO fatalErr,
+                do
+                  res <- readTMVar resVar
+                  return $ return res
+              ]
       )
       ( \(exc :: SomeException) ->
           case fromException exc of
@@ -139,11 +139,11 @@ deriving instance Monad (Fx env err)
 deriving instance (Monoid err) => MonadPlus (Fx env err)
 
 instance MonadFail (Fx env err) where
-  fail msg = Fx
-    $ ReaderT
-    $ \(FxEnv _ crash _) -> liftIO $ do
-      crash [] (ErrorCallFxExceptionReason (ErrorCall msg))
-      fail "Crashed"
+  fail msg = Fx $
+    ReaderT $
+      \(FxEnv _ crash _) -> liftIO $ do
+        crash [] (ErrorCallFxExceptionReason (ErrorCall msg))
+        fail "Crashed"
 
 instance MonadIO (Fx env SomeException) where
   liftIO io = Fx (ReaderT (\(FxEnv unmask _ _) -> ExceptT (try (unmask io))))
@@ -180,16 +180,16 @@ mapFx fn (Fx m) = Fx (fn m)
 -- __Warning:__
 -- It is your responsibility to ensure that it does not throw exceptions!
 runTotalIO :: (env -> IO res) -> Fx env err res
-runTotalIO io = Fx
-  $ ReaderT
-  $ \(FxEnv unmask crash env) ->
-    lift
-      $ catch
-        (unmask (io env))
-        ( \(exc :: SomeException) -> do
-            crash [] (UncaughtExceptionFxExceptionReason exc)
-            fail "Unhandled exception in runTotalIO. Got propagated to top."
-        )
+runTotalIO io = Fx $
+  ReaderT $
+    \(FxEnv unmask crash env) ->
+      lift $
+        catch
+          (unmask (io env))
+          ( \(exc :: SomeException) -> do
+              crash [] (UncaughtExceptionFxExceptionReason exc)
+              fail "Unhandled exception in runTotalIO. Got propagated to top."
+          )
 
 -- |
 -- Run IO which produces either an error or result.
@@ -206,15 +206,15 @@ runPartialIO io = runTotalIO io >>= either throwErr return
 -- It is your responsibility to ensure that it doesn't throw any other exceptions!
 runExceptionalIO :: (Exception exc) => (env -> IO res) -> Fx env exc res
 runExceptionalIO io =
-  Fx
-    $ ReaderT
-    $ \(FxEnv unmask crash env) -> ExceptT
-      $ catch (fmap Right (unmask (io env)))
-      $ \exc -> case fromException exc of
-        Just exc' -> return (Left exc')
-        Nothing -> do
-          crash [] (UncaughtExceptionFxExceptionReason exc)
-          fail "Unhandled exception in runExceptionalIO. Got propagated to top."
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash env) -> ExceptT $
+        catch (fmap Right (unmask (io env))) $
+          \exc -> case fromException exc of
+            Just exc' -> return (Left exc')
+            Nothing -> do
+              crash [] (UncaughtExceptionFxExceptionReason exc)
+              fail "Unhandled exception in runExceptionalIO. Got propagated to top."
 
 -- |
 -- Run STM, crashing in case of STM exceptions.
@@ -240,55 +240,55 @@ runSTM stm = runTotalIO (atomically . stm)
 -- To achieve that use `wait`.
 start :: Fx env err res -> Fx env err' (Future err res)
 start (Fx m) =
-  Fx
-    $ ReaderT
-    $ \(FxEnv unmask crash env) -> lift $ do
-      futureVar <- newEmptyTMVarIO
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash env) -> lift $ do
+        futureVar <- newEmptyTMVarIO
 
-      _ <- forkIO $ do
-        tid <- myThreadId
+        _ <- forkIO $ do
+          tid <- myThreadId
 
-        let childCrash tids dls = crash (tid : tids) dls
+          let childCrash tids dls = crash (tid : tids) dls
 
-        finalize <-
-          catch
-            ( do
-                res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
-                return (atomically (putTMVar futureVar (first Just res)))
-            )
-            ( \exc -> return $ do
-                case fromException exc of
-                  -- Catch calls to `error`.
-                  Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
-                  -- Catch anything else we could miss. Just in case.
-                  _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
-                atomically (putTMVar futureVar (Left Nothing))
-            )
+          finalize <-
+            catch
+              ( do
+                  res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
+                  return (atomically (putTMVar futureVar (first Just res)))
+              )
+              ( \exc -> return $ do
+                  case fromException exc of
+                    -- Catch calls to `error`.
+                    Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
+                    -- Catch anything else we could miss. Just in case.
+                    _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
+                  atomically (putTMVar futureVar (Left Nothing))
+              )
 
-        finalize
+          finalize
 
-      return $ Future $ Compose $ readTMVar futureVar
+        return $ Future $ Compose $ readTMVar futureVar
 
 -- |
 -- Block until the future completes either with a result or an error.
 wait :: Future err res -> Fx env err res
-wait (Future m) = Fx
-  $ ReaderT
-  $ \(FxEnv unmask crash _) ->
-    ExceptT
-      $ join
-      $ catch
-        ( do
-            futureStatus <- unmask (atomically (getCompose m))
-            return $ case futureStatus of
-              Right res -> return (Right res)
-              Left (Just err) -> return (Left err)
-              Left Nothing -> fail "Waiting for a future that crashed"
-        )
-        ( \(exc :: SomeException) -> return $ do
-            crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
-            fail "Thread crashed with uncaught exception waiting for result."
-        )
+wait (Future m) = Fx $
+  ReaderT $
+    \(FxEnv unmask crash _) ->
+      ExceptT $
+        join $
+          catch
+            ( do
+                futureStatus <- unmask (atomically (getCompose m))
+                return $ case futureStatus of
+                  Right res -> return (Right res)
+                  Left (Just err) -> return (Left err)
+                  Left Nothing -> fail "Waiting for a future that crashed"
+            )
+            ( \(exc :: SomeException) -> return $ do
+                crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
+                fail "Thread crashed with uncaught exception waiting for result."
+            )
 
 -- |
 -- Execute concurrent effects by composing them applicatively.
@@ -312,17 +312,17 @@ concurrently buildApplicative =
 -- Execute Fx in the scope of a provided environment.
 with :: With err env -> Fx env err res -> Fx env' err res
 with (With (Fx acquire)) (Fx fx) =
-  Fx
-    $ ReaderT
-    $ \(FxEnv unmask crash _) -> ExceptT $ do
-      let providerFxEnv = FxEnv unmask crash ()
-      acquisition <- runExceptT (runReaderT acquire providerFxEnv)
-      case acquisition of
-        Left err -> return (Left err)
-        Right (env, (Fx release)) -> do
-          resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
-          releasing <- runExceptT (runReaderT release providerFxEnv)
-          return (resOrErr <* releasing)
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash _) -> ExceptT $ do
+        let providerFxEnv = FxEnv unmask crash ()
+        acquisition <- runExceptT (runReaderT acquire providerFxEnv)
+        case acquisition of
+          Left err -> return (Left err)
+          Right (env, (Fx release)) -> do
+            resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
+            releasing <- runExceptT (runReaderT release providerFxEnv)
+            return (resOrErr <* releasing)
 
 -- |
 -- Execute Fx in the scope of a pool of resources.
@@ -334,21 +334,21 @@ withPoolOf poolSize theWith fx =
 
 closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
-  Fx
-    $ ReaderT
-    $ \(FxEnv unmask crash _) ->
-      ExceptT
-        $ runExceptT (runReaderT fx (FxEnv unmask crash env))
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash _) ->
+        ExceptT $
+          runExceptT (runReaderT fx (FxEnv unmask crash env))
 
 -- |
 -- Map the environment.
 -- Please notice that the expected function is contravariant.
 mapEnv :: (b -> a) -> Fx a err res -> Fx b err res
 mapEnv fn (Fx m) =
-  Fx
-    $ ReaderT
-    $ \(FxEnv unmask crash env) ->
-      runReaderT m (FxEnv unmask crash (fn env))
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash env) ->
+        runReaderT m (FxEnv unmask crash (fn env))
 
 -- |
 -- Expose the environment.
@@ -422,8 +422,8 @@ instance Functor (With err) where
 instance Applicative (With err) where
   pure env = With (pure (env, pure ()))
   With m1 <*> With m2 =
-    With
-      $ liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
+    With $
+      liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
 instance Monad (With err) where
   return = pure
@@ -480,12 +480,12 @@ pool poolSize (With acquire) = With $ do
         (env, releaseResource) <- runSTM $ const $ readTQueue queue
         return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
       release = do
-        releasers <- runSTM
-          $ const
-          $ do
-            list <- flushTQueue queue
-            guard (length list == poolSize)
-            return (fmap snd list)
+        releasers <- runSTM $
+          const $
+            do
+              list <- flushTQueue queue
+              guard (length list == poolSize)
+              return (fmap snd list)
         sequence_ releasers
    in return (resourceWith, release)
 
