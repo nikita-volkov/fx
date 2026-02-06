@@ -3,7 +3,7 @@ module Fx
     Fx,
 
     -- ** Execution
-    FxRunning (..),
+    RunsFx (..),
     runFxHandling,
 
     -- ** Error handling
@@ -483,24 +483,24 @@ pool poolSize (Provider acquire) = Provider $ do
 -- |
 -- Support for running of `Fx`.
 --
--- Apart from other things this is your interface to turn `Fx` into `IO` or `Conc`.
-class FxRunning env err fx | fx -> env, fx -> err where
+-- Apart from other things this is your interface to turn `Fx` into `IO`.
+class RunsFx env err fx | fx -> env, fx -> err where
   runFx :: Fx env err res -> fx res
 
 -- |
 -- Run `Fx` handling its error in the context monad.
-runFxHandling :: (Monad m, FxRunning env Void m) => (err -> m a) -> Fx env err a -> m a
+runFxHandling :: (Monad m, RunsFx env Void m) => (err -> m a) -> Fx env err a -> m a
 runFxHandling handler fx = runFx (exposeErr fx) >>= either handler return
 
 -- |
 -- Executes an effect with no environment and all errors handled.
-instance FxRunning () Void IO where
+instance RunsFx () Void IO where
   runFx = runFxInIO
 
-instance FxRunning () err (ExceptT err IO) where
+instance RunsFx () err (ExceptT err IO) where
   runFx fx = ExceptT (runFx (exposeErr fx))
 
-instance FxRunning env err (ReaderT env (ExceptT err IO)) where
+instance RunsFx env err (ReaderT env (ExceptT err IO)) where
   runFx fx = ReaderT (\env -> ExceptT (runFx (mapEnv (const env) (exposeErr fx))))
 
 -- |
@@ -508,13 +508,13 @@ instance FxRunning env err (ReaderT env (ExceptT err IO)) where
 -- with any environment and error.
 --
 -- Same as @(`mapEnv` (`const` ()) . `first` `absurd`)@.
-instance FxRunning () Void (Fx env err) where
+instance RunsFx () Void (Fx env err) where
   runFx = mapEnv (const ()) . first absurd
 
-instance FxRunning env err (Conc env err) where
+instance RunsFx env err (Conc env err) where
   runFx = Conc
 
-instance FxRunning () err (Provider err) where
+instance RunsFx () err (Provider err) where
   runFx fx = Provider (fmap (\env -> (env, pure ())) fx)
 
 -- ** Error Handling
