@@ -8,6 +8,7 @@ module Fx
 
     -- ** Environment handling
     with,
+    withPoolOf,
     mapEnv,
 
     -- ** Concurrency
@@ -38,7 +39,6 @@ module Fx
     With,
     acquire,
     withRelease,
-    pool,
 
     -- * Exceptions
     FxException (..),
@@ -324,6 +324,14 @@ with (With (Fx acquire)) (Fx fx) =
           releasing <- runExceptT (runReaderT release providerFxEnv)
           return (resOrErr <* releasing)
 
+-- |
+-- Execute Fx in the scope of a pool of resources.
+withPoolOf :: Int -> With err env -> Fx env err res -> Fx env' err res
+withPoolOf poolSize theWith fx =
+  with (pool poolSize theWith) do
+    poolWith <- exposeEnv
+    with poolWith fx
+
 closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
   Fx
@@ -341,6 +349,11 @@ mapEnv fn (Fx m) =
     $ ReaderT
     $ \(FxEnv unmask crash env) ->
       runReaderT m (FxEnv unmask crash (fn env))
+
+-- |
+-- Expose the environment.
+exposeEnv :: Fx env err env
+exposeEnv = Fx $ ReaderT $ \(FxEnv _ _ env) -> return env
 
 -- * Future
 
