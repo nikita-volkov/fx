@@ -7,7 +7,8 @@ module Fx
     runFxHandling,
 
     -- ** Error handling
-    ErrHandling (..),
+    throwErr,
+    handleErr,
     mapErr,
     exposeErr,
     absorbErr,
@@ -151,6 +152,10 @@ instance MonadFail (Fx env err) where
 
 instance MonadIO (Fx env SomeException) where
   liftIO io = Fx (ReaderT (\(FxEnv unmask _ _) -> ExceptT (try (unmask io))))
+
+instance MonadError err (Fx env err) where
+  throwError = throwErr
+  catchError = flip handleErr
 
 instance Bifunctor (Fx env) where
   bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
@@ -512,62 +517,45 @@ instance FxRunning env err (Conc env err) where
 instance FxRunning () err (Provider err) where
   runFx fx = Provider (fmap (\env -> (env, pure ())) fx)
 
--- ** ErrHandling
+-- ** Error Handling
 
 -------------------------
 
 -- |
--- Support for error handling.
+-- Interrupt the current computation raising an error.
 --
--- Functions provided by this class are particularly helpful,
--- when you need to map into error of type `Void`.
-class ErrHandling fx where
-  -- |
-  --  Interrupt the current computation raising an error.
-  throwErr :: err -> fx err res
+-- Same as `throwError` of `MonadError`.
+throwErr :: err -> Fx env err res
+throwErr = Fx . lift . throwE
 
-  -- |
-  --  Handle error in another failing action.
-  --  Sort of like a bind operation over the error type parameter.
-  handleErr :: (a -> fx b res) -> fx a res -> fx b res
+-- |
+-- Handle error in another failing action.
+-- Sort of like a bind operation over the error type parameter.
+--
+-- Similar to `handleError` of `MonadError` but allows changing the error type.
+handleErr :: (a -> Fx env b res) -> Fx env a res -> Fx env b res
+handleErr handler = mapFx $ \m -> ReaderT $ \unmask -> ExceptT $ do
+  a <- runExceptT (runReaderT m unmask)
+  case a of
+    Right res -> return (Right res)
+    Left err -> case handler err of
+      Fx m -> runExceptT (runReaderT m unmask)
 
 -- |
 -- Map the error.
-mapErr :: (ErrHandling m) => (a -> b) -> m a res -> m b res
+mapErr :: (a -> b) -> Fx env a res -> Fx env b res
 mapErr mapper = handleErr (throwErr . mapper)
 
 -- |
 -- Expose the error in result,
 -- producing an action, which is compatible with any error type.
-exposeErr :: (ErrHandling m, Functor (m a), Applicative (m b)) => m a res -> m b (Either a res)
+exposeErr :: Fx env a res -> Fx env b (Either a res)
 exposeErr = absorbErr Left . fmap Right
 
 -- |
 -- Map from error to result, leaving the error be anything.
-absorbErr :: (ErrHandling m, Applicative (m b)) => (a -> res) -> m a res -> m b res
+absorbErr :: (a -> res) -> Fx env a res -> Fx env b res
 absorbErr fn = handleErr (pure . fn)
-
-instance ErrHandling (Fx env) where
-  throwErr = Fx . lift . throwE
-  handleErr handler = mapFx $ \m -> ReaderT $ \unmask -> ExceptT $ do
-    a <- runExceptT (runReaderT m unmask)
-    case a of
-      Right res -> return (Right res)
-      Left err -> case handler err of
-        Fx m -> runExceptT (runReaderT m unmask)
-
-instance ErrHandling Future where
-  throwErr = Future . Compose . return . Left . Just
-  handleErr handler = mapFuture $ \m -> Compose $ do
-    a <- getCompose m
-    case a of
-      Right res -> return (Right res)
-      Left b -> case b of
-        Just err -> case handler err of
-          Future m' -> getCompose m'
-        Nothing -> return (Left Nothing)
-
-deriving instance ErrHandling (Conc env)
 
 -- * Exceptions
 
