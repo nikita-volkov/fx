@@ -7,7 +7,7 @@ module Fx
     runFxHandling,
 
     -- ** Environment handling
-    provideAndUse,
+    with,
     mapEnv,
 
     -- ** Concurrency
@@ -34,8 +34,8 @@ module Fx
     exposeErr,
     absorbErr,
 
-    -- * Provider
-    Provider,
+    -- * With
+    With,
     acquireAndRelease,
     pool,
 
@@ -309,8 +309,8 @@ concurrently buildApplicative =
 
 -- |
 -- Execute Fx in the scope of a provided environment.
-provideAndUse :: Provider err env -> Fx env err res -> Fx env' err res
-provideAndUse (Provider (Fx acquire)) (Fx fx) =
+with :: With err env -> Fx env err res -> Fx env' err res
+with (With (Fx acquire)) (Fx fx) =
   Fx
     $ ReaderT
     $ \(FxEnv unmask crash _) -> ExceptT $ do
@@ -386,7 +386,7 @@ instance Applicative (Conc env err) where
     res1 <- wait future1
     return (res1 res2)
 
--- * Provider
+-- * With
 
 -------------------------
 
@@ -398,37 +398,37 @@ instance Applicative (Conc env err) where
 --
 -- Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -- and later released as the \"managed\" package.
-newtype Provider err env = Provider (Fx () err (env, Fx () err ()))
+newtype With err env = With (Fx () err (env, Fx () err ()))
 
-instance Functor (Provider err) where
-  fmap f (Provider m) = Provider $ do
+instance Functor (With err) where
+  fmap f (With m) = With $ do
     (env, release) <- m
     return (f env, release)
 
-instance Applicative (Provider err) where
-  pure env = Provider (pure (env, pure ()))
-  Provider m1 <*> Provider m2 =
-    Provider
+instance Applicative (With err) where
+  pure env = With (pure (env, pure ()))
+  With m1 <*> With m2 =
+    With
       $ liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
-instance Monad (Provider err) where
+instance Monad (With err) where
   return = pure
-  (>>=) (Provider m1) k2 = Provider $ do
+  (>>=) (With m1) k2 = With $ do
     (env1, release1) <- m1
-    (env2, release2) <- case k2 env1 of Provider m2 -> m2
+    (env2, release2) <- case k2 env1 of With m2 -> m2
     return (env2, release2 >> release1)
 
-instance MonadIO (Provider SomeException) where
+instance MonadIO (With SomeException) where
   liftIO = runFx . liftIO
 
-instance Bifunctor Provider where
-  bimap lf rf (Provider m) = Provider (bimap lf (bimap rf (first lf)) m)
+instance Bifunctor With where
+  bimap lf rf (With m) = With (bimap lf (bimap rf (first lf)) m)
   second = fmap
 
 -- |
 -- Create a resource provider from acquiring and releasing effects.
-acquireAndRelease :: Fx () err env -> Fx env err () -> Provider err env
-acquireAndRelease acquire release = Provider $ do
+acquireAndRelease :: Fx () err env -> Fx env err () -> With err env
+acquireAndRelease acquire release = With $ do
   env <- acquire
   return (env, closeEnv env release)
 
@@ -442,13 +442,13 @@ acquireAndRelease acquire release = Provider $ do
 -- No errors get raised in it either.
 --
 -- Use this when you need to access a resource concurrently.
-pool :: Int -> Provider err env -> Provider err (Provider err' env)
-pool poolSize (Provider acquire) = Provider $ do
+pool :: Int -> With err env -> With err (With err' env)
+pool poolSize (With acquire) = With $ do
   queue <- runSTM (const newTQueue)
   replicateM_ poolSize $ do
     handle <- acquire
     runSTM $ const $ writeTQueue queue handle
-  let resourceProvider = Provider $ do
+  let resourceWith = With $ do
         (env, releaseResource) <- runSTM $ const $ readTQueue queue
         return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
       release = do
@@ -459,7 +459,7 @@ pool poolSize (Provider acquire) = Provider $ do
             guard (length list == poolSize)
             return (fmap snd list)
         sequence_ releasers
-   in return (resourceProvider, release)
+   in return (resourceWith, release)
 
 -- * Classes
 
@@ -503,8 +503,8 @@ instance RunsFx () Void (Fx env err) where
 instance RunsFx env err (Conc env err) where
   runFx = Conc
 
-instance RunsFx () err (Provider err) where
-  runFx fx = Provider (fmap (\env -> (env, pure ())) fx)
+instance RunsFx () err (With err) where
+  runFx fx = With (fmap (\env -> (env, pure ())) fx)
 
 -- ** Error Handling
 
