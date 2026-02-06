@@ -8,7 +8,6 @@ module Fx
 
     -- ** Environment handling
     with,
-    withPoolOf,
     mapEnv,
 
     -- ** Concurrency
@@ -324,14 +323,6 @@ with (With (Fx acquire)) (Fx fx) =
             releasing <- runExceptT (runReaderT release providerFxEnv)
             return (resOrErr <* releasing)
 
--- |
--- Execute Fx in the scope of a pool of resources.
-withPoolOf :: Int -> With err env -> Fx env err res -> Fx env' err res
-withPoolOf poolSize theWith fx =
-  with (pool poolSize theWith) do
-    poolWith <- exposeEnv
-    with poolWith fx
-
 closeEnv :: env -> Fx env err res -> Fx env' err res
 closeEnv env (Fx fx) =
   Fx $
@@ -349,11 +340,6 @@ mapEnv fn (Fx m) =
     ReaderT $
       \(FxEnv unmask crash env) ->
         runReaderT m (FxEnv unmask crash (fn env))
-
--- |
--- Expose the environment.
-exposeEnv :: Fx env err env
-exposeEnv = Fx $ ReaderT $ \(FxEnv _ _ env) -> return env
 
 -- * Future
 
@@ -459,35 +445,6 @@ withRelease :: Fx env err () -> With err env -> With err env
 withRelease release (With m) = With $ do
   (env, existingRelease) <- m
   return (env, existingRelease >> closeEnv env release)
-
--- |
--- Convert a single resource provider into a pool provider.
---
--- The wrapper provider acquires the specified amount of resources using the original provider,
--- and returns a modified version of the original provider,
--- whose acquisition and releasing merely takes one resource out of the pool and puts it back when done.
--- No actual acquisition or releasing happens in the wrapped provider.
--- No errors get raised in it either.
---
--- Use this when you need to access a resource concurrently.
-pool :: Int -> With err env -> With err (With err' env)
-pool poolSize (With acquire) = With $ do
-  queue <- runSTM (const newTQueue)
-  replicateM_ poolSize $ do
-    handle <- acquire
-    runSTM $ const $ writeTQueue queue handle
-  let resourceWith = With $ do
-        (env, releaseResource) <- runSTM $ const $ readTQueue queue
-        return (env, runSTM (const (writeTQueue queue (env, releaseResource))))
-      release = do
-        releasers <- runSTM $
-          const $
-            do
-              list <- flushTQueue queue
-              guard (length list == poolSize)
-              return (fmap snd list)
-        sequence_ releasers
-   in return (resourceWith, release)
 
 -- * Classes
 
