@@ -488,8 +488,8 @@ pool poolSize (With acquire) = With $ do
 -- Support for running of `Fx`.
 --
 -- Apart from other things this is your interface to turn `Fx` into `IO`.
-class RunsFx env err fx | fx -> env, fx -> err where
-  runFx :: Fx env err res -> fx res
+class RunsFx env err m | m -> env, m -> err where
+  runFx :: Fx env err res -> m res
 
 -- |
 -- Run `Fx` handling its error in the context monad.
@@ -553,6 +553,8 @@ mapErr mapper = handleErr (throwErr . mapper)
 -- |
 -- Expose the error in result,
 -- producing an action, which is compatible with any error type.
+--
+-- Almost the same as `tryError` of `MonadError`, but allows changing the error type.
 exposeErr :: Fx env a res -> Fx env b (Either a res)
 exposeErr = absorbErr Left . fmap Right
 
