@@ -7,7 +7,7 @@ module Fx
     runFxHandling,
 
     -- ** Environment handling
-    with,
+    scoping,
     mapEnv,
 
     -- ** Error handling
@@ -34,10 +34,10 @@ module Fx
     runExceptionalIO,
     runSTM,
 
-    -- * With
-    With,
+    -- * Scope
+    Scope,
     acquire,
-    withRelease,
+    releasing,
 
     -- * Exceptions
     FxException (..),
@@ -310,8 +310,8 @@ concurrently build =
 
 -- |
 -- Execute Fx in the scope of a provided environment.
-with :: With err env -> Fx env err res -> Fx env' err res
-with (With (Fx acquire)) (Fx fx) =
+scoping :: Scope err env -> Fx env err res -> Fx env' err res
+scoping (Scope (Fx acquire)) (Fx fx) =
   Fx $
     ReaderT $
       \(FxEnv unmask crash _) -> ExceptT $ do
@@ -395,7 +395,7 @@ instance Alternative (Conc env err) where
     future2 <- start m2
     wait (future1 <|> future2)
 
--- * With
+-- * Scope
 
 -------------------------
 
@@ -410,44 +410,44 @@ instance Alternative (Conc env err) where
 --
 -- __Example__:
 --
--- > postgres :: With PostgresErr Connection
--- > postgres = withRelease Postgres.disconnect $
+-- > postgres :: Scope PostgresErr Connection
+-- > postgres = releasing Postgres.disconnect $
 -- >   acquire (Postgres.connect "postgres://...")
 -- >
--- > redis :: With RedisErr Redis
--- > redis = withRelease Redis.disconnect $
+-- > redis :: Scope RedisErr Redis
+-- > redis = releasing Redis.disconnect $
 -- >   acquire (Redis.connect "redis://...")
 -- >
--- > appEnv :: With AppErr AppEnv
+-- > appEnv :: Scope AppErr AppEnv
 -- > appEnv = AppEnv <$> first PostgresErr postgres <*> first RedisErr redis
 --
 -- __Usage__: Wrap resource providers; use `with` to scope `Fx` computations within acquired resources.
 --
 -- Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -- and later released as the [\"managed\"](https://hackage.haskell.org/package/managed) package.
-newtype With err env = With (Fx () err (env, Fx () err ()))
+newtype Scope err env = Scope (Fx () err (env, Fx () err ()))
 
-instance Functor (With err) where
-  fmap f (With m) = With $ do
+instance Functor (Scope err) where
+  fmap f (Scope m) = Scope $ do
     (env, release) <- m
     return (f env, release)
 
-instance Applicative (With err) where
-  pure env = With (pure (env, pure ()))
-  With m1 <*> With m2 =
-    With $
+instance Applicative (Scope err) where
+  pure env = Scope (pure (env, pure ()))
+  Scope m1 <*> Scope m2 =
+    Scope $
       liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
-instance Bifunctor With where
-  bimap lf rf (With m) = With (bimap lf (bimap rf (first lf)) m)
+instance Bifunctor Scope where
+  bimap lf rf (Scope m) = Scope (bimap lf (bimap rf (first lf)) m)
   second = fmap
 
 -- |
 -- Create a resource provider from an acquiring effect.
 --
--- To add a release action, use 'withRelease'.
-acquire :: Fx () err env -> With err env
-acquire acquire = With do
+-- To add a release action, use 'releasing'.
+acquire :: Fx () err env -> Scope err env
+acquire acquire = Scope do
   env <- acquire
   return (env, pure ())
 
@@ -456,10 +456,11 @@ acquire acquire = With do
 --
 -- Example:
 --
--- > fileWith :: With err Handle
--- > fileWith = withRelease closeHandle (acquire openFile)
-withRelease :: Fx env err () -> With err env -> With err env
-withRelease release (With m) = With $ do
+-- > fileInWriteMode :: FilePath -> Scope IOError Handle
+-- > fileInWriteMode path =
+-- >   releasing hClose (acquire (openFile path WriteMode))
+releasing :: Fx env err () -> Scope err env -> Scope err env
+releasing release (Scope m) = Scope $ do
   (env, existingRelease) <- m
   return (env, existingRelease >> closeEnv env release)
 
@@ -500,8 +501,8 @@ instance RunsFx env err (Fx env err) where
 instance RunsFx env err (Conc env err) where
   runFx = Conc
 
-instance RunsFx () err (With err) where
-  runFx fx = With (fmap (\env -> (env, pure ())) fx)
+instance RunsFx () err (Scope err) where
+  runFx fx = Scope (fmap (\env -> (env, pure ())) fx)
 
 -- ** Error Handling
 

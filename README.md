@@ -20,7 +20,7 @@ This library is particularly useful for applications with:
 
 - **Explicit Environment and Error Types**: Computations depend on a provided `env` and fail with a specific `err`, preventing silent failures and enabling type-safe composition.
 - **Modular Composition**: Use `mapEnv` and `mapErr` to adapt sub-computations (e.g., embed a DB-specific effect into a full app context).
-- **Resource Management**: The `With` type provides an applicative interface for acquiring and releasing resources, ensuring cleanup even on errors.
+- **Resource Management**: The `Scope` type provides an applicative interface for acquiring and releasing resources, ensuring cleanup even on errors.
 - **Concurrency Support**: Execute multiple effects in parallel via `concurrently` composing via `Alternative` interface.
 - **Rich Error Handling**: Combinators like `handleErr`, `exposeErr`, and `absorbErr` for flexible recovery and transformation.
 - **IO Integration**: Safely lift `IO` actions with exception handling, while warning about abstraction leaks.
@@ -32,7 +32,7 @@ This library is particularly useful for applications with:
 `fx` is designed for applications where you want to separate pure domain logic from effectful infrastructure. Drawing from Ports and Adapters:
 
 - **Core Domain**: Write pure functions or abstract monadic actions (e.g., constrained by MTL-style classes like `class DBPort m`). These act as "ports" declaring required capabilities without implementing them.
-- **Infrastructure Adapters**: Use `Fx` to provide concrete implementations, composing sub-effects (e.g., DB and S3) via `mapEnv`/`mapErr`. Resources are managed with `With` for safe acquisition/release.
+- **Infrastructure Adapters**: Use `Fx` to provide concrete implementations, composing sub-effects (e.g., DB and S3) via `mapEnv`/`mapErr`. Resources are managed with `Scope` for safe acquisition/release.
 - **Interpretation**: At the app's entry point, run the core logic by interpreting ports into `Fx` instances, then execute via `runFx`.
 
 This approach ensures:
@@ -52,7 +52,7 @@ data Env = Env { dbConn :: Connection, apiKey :: Text }
 data Err = DbError SomeException | ApiError Text
 
 -- Resource acquisition with automatic cleanup
-env :: With Err Env
+env :: Scope Err Env
 env = do
   conn <-
     acquire (connectDb "postgres://localhost/mydb")
@@ -79,7 +79,7 @@ The design of `fx` draws inspiration from several sources:
 
 - **Ports and Adapters (Hexagonal Architecture)**: Emphasizes separation of core domain logic from infrastructure, with explicit ports and adapters. `fx` focuses on the infrastructure side, providing a way to implement adapters that compose effects modularly. Thus, it promotes the cornerstone principle of programming in Haskell, where pure functions are isolated from side effects.
 
-- **Managed** (from `managed` library)**: The `With` type in `fx` is inspired by the `Managed` monad, providing a way to acquire and release resources safely. However, `fx` extends this concept to support explicit error handling and composition with other effects.
+- **Managed** (from `managed` library)**: The `Scope` type in `fx` is inspired by the `Managed` monad, providing a way to acquire and release resources safely. However, `fx` extends this concept to support explicit error handling and composition with other effects.
 
 - **ReaderT and ExceptT**: The `Fx` type can be seen as a generalization of the `ReaderT env (ExceptT err IO)` pattern, but with better composability and safety. Same as in this pattern it avoids the pitfalls of deep transformer stacks while still providing the same capabilities.
 
