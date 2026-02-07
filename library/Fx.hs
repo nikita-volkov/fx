@@ -215,6 +215,62 @@ runExceptionalIO io =
               fail "Unhandled exception in runExceptionalIO. Got propagated to top."
 
 -- |
+-- Execute Fx in the scope of a provided environment.
+scoping :: Scope err env -> Fx env err res -> Fx env' err res
+scoping (Scope (Fx acquire)) (Fx fx) =
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash _) -> ExceptT $ do
+        let providerFxEnv = FxEnv unmask crash ()
+        acquisition <- runExceptT (runReaderT acquire providerFxEnv)
+        case acquisition of
+          Left err -> return (Left err)
+          Right (env, (Fx release)) -> do
+            resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
+            releasing <- runExceptT (runReaderT release providerFxEnv)
+            return (resOrErr <* releasing)
+
+closeEnv :: env -> Fx env err res -> Fx env' err res
+closeEnv env (Fx fx) =
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash _) ->
+        ExceptT $
+          runExceptT (runReaderT fx (FxEnv unmask crash env))
+
+-- |
+-- Map the environment.
+-- Please notice that the expected function is contravariant.
+mapEnv :: (b -> a) -> Fx a err res -> Fx b err res
+mapEnv fn (Fx m) =
+  Fx $
+    ReaderT $
+      \(FxEnv unmask crash env) ->
+        runReaderT m (FxEnv unmask crash (fn env))
+
+-- * Future
+
+-------------------------
+
+-- |
+-- Handle to a result of an action which may still be being executed on another thread.
+--
+-- The way you deal with it is thru the `start` and `wait` functions.
+newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
+  deriving (Functor, Applicative, Alternative)
+
+instance Bifunctor Future where
+  bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
+
+mapFuture ::
+  ( Compose STM (Either (Maybe err1)) res1 ->
+    Compose STM (Either (Maybe err2)) res2
+  ) ->
+  Future err1 res1 ->
+  Future err2 res2
+mapFuture fn (Future m) = Future (fn m)
+
+-- |
 -- Spawn a thread and start running an effect on it,
 -- returning the associated future.
 --
@@ -298,62 +354,6 @@ concurrently ::
 concurrently build =
   case build Conc of
     Conc fx -> fx
-
--- |
--- Execute Fx in the scope of a provided environment.
-scoping :: Scope err env -> Fx env err res -> Fx env' err res
-scoping (Scope (Fx acquire)) (Fx fx) =
-  Fx $
-    ReaderT $
-      \(FxEnv unmask crash _) -> ExceptT $ do
-        let providerFxEnv = FxEnv unmask crash ()
-        acquisition <- runExceptT (runReaderT acquire providerFxEnv)
-        case acquisition of
-          Left err -> return (Left err)
-          Right (env, (Fx release)) -> do
-            resOrErr <- runExceptT (runReaderT fx (FxEnv unmask crash env))
-            releasing <- runExceptT (runReaderT release providerFxEnv)
-            return (resOrErr <* releasing)
-
-closeEnv :: env -> Fx env err res -> Fx env' err res
-closeEnv env (Fx fx) =
-  Fx $
-    ReaderT $
-      \(FxEnv unmask crash _) ->
-        ExceptT $
-          runExceptT (runReaderT fx (FxEnv unmask crash env))
-
--- |
--- Map the environment.
--- Please notice that the expected function is contravariant.
-mapEnv :: (b -> a) -> Fx a err res -> Fx b err res
-mapEnv fn (Fx m) =
-  Fx $
-    ReaderT $
-      \(FxEnv unmask crash env) ->
-        runReaderT m (FxEnv unmask crash (fn env))
-
--- * Future
-
--------------------------
-
--- |
--- Handle to a result of an action which may still be being executed on another thread.
---
--- The way you deal with it is thru the `start` and `wait` functions.
-newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
-  deriving (Functor, Applicative, Alternative)
-
-instance Bifunctor Future where
-  bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
-
-mapFuture ::
-  ( Compose STM (Either (Maybe err1)) res1 ->
-    Compose STM (Either (Maybe err2)) res2
-  ) ->
-  Future err1 res1 ->
-  Future err2 res2
-mapFuture fn (Future m) = Future (fn m)
 
 -- * Conc
 
