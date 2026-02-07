@@ -32,7 +32,6 @@ module Fx
     runTotalIO,
     runPartialIO,
     runExceptionalIO,
-    runSTM,
 
     -- * Scope
     Scope,
@@ -215,13 +214,6 @@ runExceptionalIO io =
             Nothing -> do
               crash [] (UncaughtExceptionFxExceptionReason exc)
               fail "Unhandled exception in runExceptionalIO. Got propagated to top."
-
--- |
--- Run STM, crashing in case of STM exceptions.
---
--- Same as @`runTotalIO` . `atomically`@.
-runSTM :: (env -> STM res) -> Fx env err res
-runSTM stm = runTotalIO (atomically . stm)
 
 -- |
 -- Spawn a thread and start running an effect on it,
