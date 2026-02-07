@@ -55,20 +55,22 @@ data Err = DbError SomeException | ApiError Text
 env :: Scope Err Env
 env = do
   conn <-
-    acquire (connectDb "postgres://localhost/mydb")
-      `withRelease` closeDb
+    releasing closeDb $
+      acquire (connectDb "postgres://localhost/mydb")
   key <-
     acquire (readApiKey "config.txt")
   pure $ Env conn key
 
 -- Business logic with explicit dependencies
 fetchUser :: Int -> Fx Env Err User
-fetchUser userId = runExceptionalIO $ \Env{dbConn} -> 
-  queryUser dbConn userId
+fetchUser userId =
+  mapErr DbError $
+    runExceptionalIO $ \Env{dbConn} -> 
+      queryUser dbConn userId
 
 -- Compose and run
 main :: IO ()
-main = runFx $ with env $ do
+main = runFx $ scoping env $ do
   user <- fetchUser 42
   liftIO $ print user
 ```
@@ -79,10 +81,10 @@ The design of `fx` draws inspiration from several sources:
 
 - **Ports and Adapters (Hexagonal Architecture)**: Emphasizes separation of core domain logic from infrastructure, with explicit ports and adapters. `fx` focuses on the infrastructure side, providing a way to implement adapters that compose effects modularly. Thus, it promotes the cornerstone principle of programming in Haskell, where pure functions are isolated from side effects.
 
-- **Managed** (from `managed` library)**: The `Scope` type in `fx` is inspired by the `Managed` monad, providing a way to acquire and release resources safely. However, `fx` extends this concept to support explicit error handling and composition with other effects.
+- **Managed** (from `managed` library): The `Scope` type in `fx` is inspired by the `Managed` monad, providing a way to acquire and release resources safely. However, `fx` extends this concept to support explicit error handling and composition with other effects.
 
 - **ReaderT and ExceptT**: The `Fx` type can be seen as a generalization of the `ReaderT env (ExceptT err IO)` pattern, but with better composability and safety. Same as in this pattern it avoids the pitfalls of deep transformer stacks while still providing the same capabilities.
 
 - **UIO**: The approach to lifting `IO` actions with explicit error handling in `fx` is influenced by the ideas presented in the "unexceptionalio" library, promoting safer interaction with `IO` while avoiding unchecked exceptions.
 
-- **ZIO**: Although initially conceived at the same time as `ZIO`, the library does intersect in core ideas and due to the popularity of ZIO it takes its experience and evolution into account.
+- **ZIO**: Although initially conceived at the same time as the `ZIO` library for Scala, `fx` does intersect in core ideas and due to the popularity of ZIO it takes its experience and evolution into account.

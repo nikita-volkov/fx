@@ -338,7 +338,10 @@ wait (Future m) = Fx $
             )
 
 -- |
--- Execute concurrent effects by composing them applicatively.
+-- Execute concurrent effects in either one or a combination of the following ways:
+--
+-- - __Complete__: Run in parallel and wait for all results (Applicative instance)
+-- - __Race__: Run in parallel and choose the result of the first one to produce it or to fail (Alternative instance)
 --
 -- E.g.,
 --
@@ -348,6 +351,14 @@ wait (Future m) = Fx $
 -- >     (,)
 -- >       <$> lift (selectMetadataById id)
 -- >       <*> lift (getFileById id)
+--
+-- One interesting use of the `Alternative` instance is implementing timeouts:
+--
+-- > timeout :: Int -> Fx env err res -> Fx env err (Maybe res)
+-- > timeout millis action =
+-- >   concurrently $ \lift ->
+-- >     lift action
+-- >       <|> lift (runTotalIO (Nothing <$ threadDelay (fromIntegral millis * 1000))))
 concurrently ::
   (forall f. (Alternative f) => (forall x. Fx env err x -> f x) -> f res) ->
   Fx env err res
@@ -391,28 +402,31 @@ instance Alternative (Conc env err) where
 -------------------------
 
 -- |
--- An applicative computation that acquires an environment `env` and may fail with `err`. Ideal for resource management.
+-- Instructions of how to acquire and release a resource of type `env` and which may fail with `err`.
+-- A composable abstraction over resource management and the `bracket` operation.
 --
 -- __Key Properties__:
 --
--- - Composes multiple acquisitions (e.g., open DB + S3).
+-- - Composes multiple acquisitions (e.g., open DB + S3) into one.
 -- - Ensures release actions are called, even on errors.
--- - Acts as an `Applicative` and `Functor`.
 --
 -- __Example__:
 --
--- > postgres :: Scope PostgresErr Connection
--- > postgres = releasing Postgres.disconnect $
--- >   acquire (Postgres.connect "postgres://...")
+-- > postgres :: Scope PostgresErr PostgresEnv
+-- > postgres =
+-- >   releasing Postgres.disconnect $
+-- >     acquire (Postgres.connect "postgres://...")
 -- >
--- > redis :: Scope RedisErr Redis
--- > redis = releasing Redis.disconnect $
--- >   acquire (Redis.connect "redis://...")
+-- > redis :: Scope RedisErr RedisEnv
+-- > redis =
+-- >   releasing Redis.disconnect $
+-- >     acquire (Redis.connect "redis://...")
 -- >
 -- > appEnv :: Scope AppErr AppEnv
--- > appEnv = AppEnv <$> first PostgresErr postgres <*> first RedisErr redis
+-- > appEnv =
+-- >   AppEnv <$> first PostgresErr postgres <*> first RedisErr redis
 --
--- __Usage__: Wrap resource providers; use `with` to scope `Fx` computations within acquired resources.
+-- __Usage__: Wrap resource providers; use `scoping` to scope `Fx` computations within acquired resources.
 --
 -- Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
 -- and later released as the [\"managed\"](https://hackage.haskell.org/package/managed) package.
