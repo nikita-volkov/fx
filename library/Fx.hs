@@ -4,7 +4,6 @@ module Fx
 
     -- ** Execution
     RunsFx (..),
-    runFxHandling,
 
     -- ** Environment handling
     scoping,
@@ -470,11 +469,6 @@ releasing release (Scope m) = Scope $ do
 -- Apart from other things this is your interface to turn `Fx` into `IO`.
 class RunsFx env err m | m -> env, m -> err where
   runFx :: Fx env err res -> m res
-
--- |
--- Run `Fx` handling its error in the context monad.
-runFxHandling :: (Monad m, RunsFx env Void m) => (err -> m a) -> Fx env err a -> m a
-runFxHandling handler fx = runFx (exposeErr fx) >>= either handler return
 
 -- |
 -- Executes an effect with no environment and all errors handled.
