@@ -1,7 +1,15 @@
 cabal-version: 3.4
 name: fx
 version: 0.5
-synopsis: Revamped effect system
+synopsis: Modular effectful computations with explicit environments and errors
+description:
+  A lightweight library for writing effectful computations with explicit
+  environment dependencies and error handling. Provides value-based abstractions
+  for effects without deep monad transformer stacks.
+
+  Key features: explicit env/err types, composable and safe resource management and
+  concurrency, and compatibility with Ports and Adapters architecture.
+
 category: Effects, Resources
 homepage: https://github.com/nikita-volkov/fx
 bug-reports: https://github.com/nikita-volkov/fx/issues

@@ -117,14 +117,15 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
 -- |
 -- Effectful computation with explicit errors in the context of provided environment.
 --
--- Calling `fail` causes the whole app to interrupt outputting a message to console.
--- `fail` is intended to be used in events which you expect never to happen,
--- and hence which should be considered bugs.
--- It is similar to calling `fail` on IO,
--- with a major difference of the error never getting lost in a concurrent setting.
+-- Think of it as a combination of `ReaderT` and `ExceptT` over `IO`, with some extra features for concurrency and error handling.
 --
--- Calling `fail` results in `ErrorCallFxExceptionReason` in the triggerred `FxException`.
--- Thus in effect it is the same as calling the `error` function.
+-- __Key Properties__:
+--
+-- - Designed for explicit dependency injection and error propagation.
+-- - In concurrent settings, errors are raised as exceptions to avoid silent failures.
+-- - `fail` and `error` never get lost in a concurrent setting.
+--
+-- __Usage__: Use for any effectful logic, parametric over context and failures. Compose with `mapEnv`/`mapErr` for modularity.
 newtype Fx env err res = Fx (ReaderT (FxEnv env) (ExceptT err IO) res)
 
 deriving instance Functor (Fx env err)
@@ -399,13 +400,31 @@ instance Alternative (Conc env err) where
 -------------------------
 
 -- |
--- Effectful computation with explicit errors,
--- which encompasses environment acquisition and releasing.
+-- An applicative computation that acquires an environment `env` and may fail with `err`. Ideal for resource management.
 --
--- Composes well, allowing you to merge multiple providers into one.
+-- __Key Properties__:
+--
+-- - Composes multiple acquisitions (e.g., open DB + S3).
+-- - Ensures release actions are called, even on errors.
+-- - Acts as an `Applicative` and `Functor`.
+--
+-- __Example__:
+--
+-- > postgres :: With PostgresErr Connection
+-- > postgres = withRelease Postgres.disconnect $
+-- >   acquire (Postgres.connect "postgres://...")
+-- >
+-- > redis :: With RedisErr Redis
+-- > redis = withRelease Redis.disconnect $
+-- >   acquire (Redis.connect "redis://...")
+-- >
+-- > appEnv :: With AppErr AppEnv
+-- > appEnv = AppEnv <$> first PostgresErr postgres <*> first RedisErr redis
+--
+-- __Usage__: Wrap resource providers; use `with` to scope `Fx` computations within acquired resources.
 --
 -- Builds up on ideas expressed in http://www.haskellforall.com/2013/06/the-resource-applicative.html
--- and later released as the \"managed\" package.
+-- and later released as the [\"managed\"](https://hackage.haskell.org/package/managed) package.
 newtype With err env = With (Fx () err (env, Fx () err ()))
 
 instance Functor (With err) where
