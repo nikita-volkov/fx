@@ -12,6 +12,7 @@ module Fx.Fx
 
     -- ** Environment handling
     mapEnv,
+    interlay,
 
     -- ** Error handling
     throwErr,
@@ -103,15 +104,15 @@ instance MonadError err (Fx env err) where
         Fx m -> runExceptT (runReaderT m fxEnv)
 
 instance Bifunctor (Fx env) where
-  bimap lf rf = mapFx (mapReaderT (mapExceptT (fmap (bimap lf rf))))
+  bimap lf rf = mapTransformers (mapReaderT (mapExceptT (fmap (bimap lf rf))))
 
-mapFx ::
+mapTransformers ::
   ( ReaderT (FxEnv env1) (ExceptT err1 IO) res1 ->
     ReaderT (FxEnv env2) (ExceptT err2 IO) res2
   ) ->
   Fx env1 err1 res1 ->
   Fx env2 err2 res2
-mapFx fn (Fx m) = Fx (fn m)
+mapTransformers fn (Fx m) = Fx (fn m)
 
 -- * IO Execution
 
@@ -227,6 +228,32 @@ mapEnv fn (Fx m) =
       \(FxEnv unmask crash env) ->
         runReaderT m (FxEnv unmask crash (fn env))
 
+-- |
+-- Map both environment and error and apply a transformation function.
+interlay ::
+  -- | Environment mapping function. Contravariant.
+  (env -> env') ->
+  -- | Error mapping function. Covariant.
+  (err' -> err) ->
+  -- | Focused transformation function.
+  (forall res'. Fx env' err' res' -> Fx env' err' res') ->
+  Fx env err res ->
+  Fx env err res
+interlay envMap errMap transform fx = Fx $ ReaderT $ \(FxEnv unmask crash env) ->
+  let env' = envMap env
+      -- Run the transformation in the env' context
+      -- First, adapt fx to run in env' by giving it access to env through the closure
+      fxInEnv' = Fx $ ReaderT $ \(FxEnv _ _ _) ->
+        let Fx m = fx
+         in runReaderT m (FxEnv unmask crash env)
+      -- Expose errors so they're in the result
+      fxExposed = exposeErr fxInEnv'
+      -- Apply transformation
+      Fx transformed = transform fxExposed
+   in -- Run transformed in env' context and map errors back
+      mapExceptT (fmap (first errMap)) (runReaderT transformed (FxEnv unmask crash env'))
+        >>= either throwE return
+
 -- * Classes
 
 -------------------------
@@ -273,7 +300,7 @@ throwErr = Fx . lift . throwE
 --
 -- Similar to `handleError` of `MonadError` but allows changing the error type.
 handleErr :: (a -> Fx env b res) -> Fx env a res -> Fx env b res
-handleErr handler = mapFx $ \m -> ReaderT $ \unmask -> ExceptT $ do
+handleErr handler = mapTransformers $ \m -> ReaderT $ \unmask -> ExceptT $ do
   a <- runExceptT (runReaderT m unmask)
   case a of
     Right res -> return (Right res)

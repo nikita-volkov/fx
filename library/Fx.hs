@@ -16,6 +16,9 @@ module Fx
     exposeErr,
     absorbErr,
 
+    -- ** General handling
+    interlay,
+
     -- ** Concurrency
     concurrently,
 
