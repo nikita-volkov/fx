@@ -89,7 +89,11 @@ library
     Fx
 
   other-modules:
+    Fx.Conc
+    Fx.Future
+    Fx.Fx
     Fx.Prelude
+    Fx.Scope
     Fx.Strings
 
   build-depends:
