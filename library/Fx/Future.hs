@@ -68,7 +68,7 @@ start (Fx m) =
       \(FxEnv unmask crash env) -> lift $ do
         futureVar <- newEmptyTMVarIO
 
-        tid <- forkIO $ do
+        tid <- forkIO $ handle (\ThreadKilled -> void $ atomically (tryPutTMVar futureVar (Left Nothing))) $ do
           tid <- myThreadId
 
           let childCrash tids dls = crash (tid : tids) dls

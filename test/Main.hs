@@ -21,6 +21,22 @@ main = hspec do
           _ -> False
       )
 
+  it "Racing completes with first result" do
+    -- Test that racing returns the first result
+    let slowAction = do
+          runTotalIO $ \_ -> threadDelay 1000000 -- 1 second
+          return (1 :: Int)
+    
+    let fastAction = do
+          return (2 :: Int)
+    
+    -- Race them using concurrently
+    result <- runFx $ concurrently $ \lift ->
+      lift slowAction <|> lift fastAction
+    
+    -- The fast action should win
+    result `shouldBe` 2
+
 testException :: Fx () Void a -> (FxException -> Bool) -> IO ()
 testException fx validateExc = do
   res <- try @FxException $ runFx $ fx
