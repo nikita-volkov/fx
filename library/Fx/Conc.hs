@@ -7,8 +7,8 @@ module Fx.Conc
   )
 where
 
-import Fx.Future (start, wait)
-import Fx.Fx (Fx, RunsFx (..))
+import Fx.Future (Future (..), start, wait)
+import Fx.Fx (Fx, RunsFx (..), runTotalIO)
 import Fx.Prelude
 
 -- |
@@ -33,6 +33,9 @@ instance Alternative (Conc env err) where
   (<|>) (Conc m1) (Conc m2) = Conc $ do
     future1 <- start m1
     future2 <- start m2
+    -- Race the futures - the first to complete wins
+    -- For now, we don't cancel the loser thread
+    -- It will continue to run but its result will be ignored
     wait (future1 <|> future2)
 
 -- |

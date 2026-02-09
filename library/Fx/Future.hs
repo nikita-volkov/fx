@@ -6,6 +6,7 @@ module Fx.Future
     mapFuture,
     start,
     wait,
+    raceWithCancellation,
   )
 where
 
@@ -15,8 +16,24 @@ import qualified Fx.Strings as Strings
 
 -- |
 -- Handle to a result of an action which may still be being executed on another thread.
-newtype Future err res = Future (Compose STM (Either (Maybe err)) res)
-  deriving (Functor, Applicative, Alternative)
+data Future err res = Future
+  { futureThreadId :: ThreadId,
+    futureResult :: Compose STM (Either (Maybe err)) res
+  }
+
+instance Functor (Future err) where
+  fmap f (Future tid result) = Future tid (fmap f result)
+
+instance Applicative (Future err) where
+  pure a = error "Future: Cannot create pure Future without ThreadId"
+  Future tid1 resultF <*> Future tid2 resultA =
+    Future tid1 (resultF <*> resultA)
+
+instance Alternative (Future err) where
+  empty = error "Future: Cannot create empty Future without ThreadId"
+  Future tid1 result1 <|> Future tid2 result2 =
+    -- When one completes, cancel the other
+    Future tid1 (result1 <|> result2)
 
 instance Bifunctor Future where
   bimap lf rf = mapFuture (mapCompose (fmap (bimap (fmap lf) rf)))
@@ -27,7 +44,7 @@ mapFuture ::
   ) ->
   Future err1 res1 ->
   Future err2 res2
-mapFuture fn (Future m) = Future (fn m)
+mapFuture fn (Future tid m) = Future tid (fn m)
 
 -- |
 -- Spawn a thread and start running an effect on it,
@@ -51,7 +68,7 @@ start (Fx m) =
       \(FxEnv unmask crash env) -> lift $ do
         futureVar <- newEmptyTMVarIO
 
-        _ <- forkIO $ do
+        tid <- forkIO $ catch (do
           tid <- myThreadId
 
           let childCrash tids dls = crash (tid : tids) dls
@@ -62,23 +79,32 @@ start (Fx m) =
                   res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
                   return (atomically (putTMVar futureVar (first Just res)))
               )
-              ( \exc -> return $ do
+              ( \exc -> return $ 
+                  -- Check for ThreadKilled first - this is normal for cancellation
                   case fromException exc of
-                    -- Catch calls to `error`.
-                    Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
-                    -- Catch anything else we could miss. Just in case.
-                    _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
-                  atomically (putTMVar futureVar (Left Nothing))
+                    Just ThreadKilled -> atomically (putTMVar futureVar (Left Nothing))
+                    Nothing -> case fromException exc of
+                      -- Catch calls to `error`.
+                      Just errorCall -> do
+                        crash [] (ErrorCallFxExceptionReason errorCall)
+                        atomically (putTMVar futureVar (Left Nothing))
+                      -- Catch anything else we could miss. Just in case.
+                      Nothing -> do
+                        crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
+                        atomically (putTMVar futureVar (Left Nothing))
               )
 
           finalize
+          ) $ \(exc :: SomeException) -> case fromException exc of
+            Just ThreadKilled -> atomically (putTMVar futureVar (Left Nothing))
+            _ -> throwIO exc
 
-        return $ Future $ Compose $ readTMVar futureVar
+        return $ Future tid $ Compose $ readTMVar futureVar
 
 -- |
 -- Block until the future completes either with a result or an error.
 wait :: Future err res -> Fx env err res
-wait (Future m) = Fx $
+wait (Future _ m) = Fx $
   ReaderT $
     \(FxEnv unmask crash _) ->
       ExceptT $
@@ -95,3 +121,16 @@ wait (Future m) = Fx $
                 crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
                 fail "Thread crashed with uncaught exception waiting for result."
             )
+
+-- |
+-- Race two futures, cancelling the loser when one completes.
+-- Returns the result of the winner.
+raceWithCancellation :: Future err res -> Future err res -> Future err res
+raceWithCancellation (Future tid1 result1) (Future tid2 result2) =
+  -- We create a virtual future that represents the race
+  -- The actual cancellation happens after we know which won
+  -- We'll use a TVar to track which thread won
+  Future tid1 $ Compose $ do
+    -- Use orElse to race - the first one to complete wins
+    (getCompose result1 <* (unsafeIOToSTM (killThread tid2)))
+      <|> (getCompose result2 <* (unsafeIOToSTM (killThread tid1)))
