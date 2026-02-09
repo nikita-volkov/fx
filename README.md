@@ -6,11 +6,31 @@
 
 ## Overview
 
-`fx` is a lightweight Haskell library for writing effectful computations with explicit environment dependencies, error handling, and resource management. It provides a value-based abstraction for effects, allowing modular composition of computations without relying on deep monad transformer stacks. Inspired by principles like Ports and Adapters (Hexagonal Architecture), `fx` helps isolate the infrastructure concerns from pure domain logic.
+`fx` is a lightweight Haskell DSL for implementing IO-level operations in a safer and more composable way. It targets concurrent applications that deal with resources and require precision in error handling.
 
-At its core, `fx` treats effects as computations that are parametric over environments (`env`) and errors (`err`), enabling easy mapping, handling, and composition. It supports concurrent execution, safe resource acquisition/release.
+In `fx` application is an IO operation that is parameterized by some environment (`env`) and an error type (`err`). It captures a common pattern, where you have a set of resources (e.g., database connections, API clients) and a well-defined error model under the following type:
 
-This library is particularly useful for applications with:
+```haskell
+data Fx env err result
+```
+
+Which is a `Monad` among other things.
+
+And it performs, because it is implemented simply as a modification of the Reader pattern.
+
+It supports leakless structured concurrency declarable via `Alternative` and `Applicative` interfaces. Similar to the `Concurrently` abstraction from `async`. It does not lose threads or errors. The errors get compile-time checked to be handled.
+
+It provides for leakless resource management via the type:
+
+```haskell
+data Scope err env
+```
+
+Which is an adaptation of the `Managed` abstraction from the `managed` library.
+
+Inspired by principles like Ports and Adapters (Hexagonal Architecture), `fx` helps isolate the infrastructure concerns from pure domain logic.
+
+It is particularly useful for applications with:
 
 - Modular resources (e.g., DB connections, S3 clients).
 - Hierarchical environments and errors (e.g., sub-modules composing into a top-level app).
