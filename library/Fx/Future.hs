@@ -68,7 +68,7 @@ start (Fx m) =
       \(FxEnv unmask crash env) -> lift $ do
         futureVar <- newEmptyTMVarIO
 
-        tid <- forkIO $ catch (do
+        tid <- forkIO $ do
           tid <- myThreadId
 
           let childCrash tids dls = crash (tid : tids) dls
@@ -79,25 +79,16 @@ start (Fx m) =
                   res <- runExceptT (runReaderT m (FxEnv unmask childCrash env))
                   return (atomically (putTMVar futureVar (first Just res)))
               )
-              ( \exc -> return $ 
-                  -- Check for ThreadKilled first - this is normal for cancellation
+              ( \exc -> return $ do
                   case fromException exc of
-                    Just ThreadKilled -> atomically (putTMVar futureVar (Left Nothing))
-                    Nothing -> case fromException exc of
-                      -- Catch calls to `error`.
-                      Just errorCall -> do
-                        crash [] (ErrorCallFxExceptionReason errorCall)
-                        atomically (putTMVar futureVar (Left Nothing))
-                      -- Catch anything else we could miss. Just in case.
-                      Nothing -> do
-                        crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
-                        atomically (putTMVar futureVar (Left Nothing))
+                    -- Catch calls to `error`.
+                    Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
+                    -- Catch anything else we could miss. Just in case.
+                    _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
+                  atomically (putTMVar futureVar (Left Nothing))
               )
 
           finalize
-          ) $ \(exc :: SomeException) -> case fromException exc of
-            Just ThreadKilled -> atomically (putTMVar futureVar (Left Nothing))
-            _ -> throwIO exc
 
         return $ Future tid $ Compose $ readTMVar futureVar
 

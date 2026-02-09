@@ -34,8 +34,8 @@ instance Alternative (Conc env err) where
     future1 <- start m1
     future2 <- start m2
     -- Race the futures - the first to complete wins
-    -- For now, we don't cancel the loser thread
-    -- It will continue to run but its result will be ignored
+    -- TODO: Implement actual thread cancellation for the loser
+    -- Currently the loser thread will continue to run but its result is ignored
     wait (future1 <|> future2)
 
 -- |
