@@ -91,6 +91,11 @@ library
   other-modules:
     Fx.Prelude
     Fx.Strings
+    Fx.Internal.Types
+    Fx.Internal.Fx
+    Fx.Internal.Scope
+    Fx.Internal.Future
+    Fx.Internal.Conc
 
   build-depends:
     base >=4.9 && <5,
