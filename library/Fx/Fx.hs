@@ -235,10 +235,10 @@ interlay ::
   (env -> env') ->
   -- | Error mapping function. Covariant.
   (err' -> err) ->
-  -- | Focused transformation function.
+  -- | Transformation function on the nested effect.
   (forall res'. Fx env' err' res' -> Fx env' err' res') ->
-  Fx env err res ->
-  Fx env err res
+  -- | Transformation function on the whole effect.
+  (Fx env err res -> Fx env err res)
 interlay envMap errMap transform fx = Fx $ ReaderT $ \(FxEnv unmask crash env) ->
   let env' = envMap env
       -- Run the transformation in the env' context
