@@ -12,7 +12,7 @@ module Fx.Fx
 
     -- ** Environment handling
     mapEnv,
-    interlay,
+    subtransform,
 
     -- ** Error handling
     throwErr,
@@ -229,29 +229,33 @@ mapEnv fn (Fx m) =
         runReaderT m (FxEnv unmask crash (fn env))
 
 -- |
--- Map both environment and error and apply a transformation function.
-interlay ::
-  -- | Environment mapping function. Contravariant.
+-- Transform an effect by changing its environment and error context, then applying a transformation.
+--
+-- This is useful for:
+--
+-- * Running effects with different environments (e.g., focusing on a sub-environment)
+-- * Converting between error types while transforming the effect
+-- * Applying middleware-like transformations (logging, retries, etc.) in a different context
+subtransform ::
+  -- | Environment mapping function. Contravariant: maps from the outer to inner environment.
   (env -> env') ->
-  -- | Error mapping function. Covariant.
+  -- | Error mapping function. Covariant: maps from the inner to outer error.
   (err' -> err) ->
-  -- | Transformation function on the nested effect.
+  -- | Transformation to apply to the effect in the new context.
   (forall res'. Fx env' err' res' -> Fx env' err' res') ->
-  -- | Transformation function on the whole effect.
   (Fx env err res -> Fx env err res)
-interlay envMap errMap transform fx = Fx $ ReaderT $ \(FxEnv unmask crash env) ->
+subtransform envMap errMap transform fx = Fx $ ReaderT $ \(FxEnv unmask crash env) ->
   let env' = envMap env
-      -- Run the transformation in the env' context
-      -- First, adapt fx to run in env' by giving it access to env through the closure
+      -- Adapt fx to run in env' environment
       fxInEnv' = Fx $ ReaderT $ \(FxEnv _ _ _) ->
         let Fx m = fx
          in runReaderT m (FxEnv unmask crash env)
-      -- Expose errors so they're in the result
-      fxExposed = exposeErr fxInEnv'
-      -- Apply transformation
-      Fx transformed = transform fxExposed
-   in -- Run transformed in env' context and map errors back
-      mapExceptT (fmap (first errMap)) (runReaderT transformed (FxEnv unmask crash env'))
+      -- Expose errors so the transform can work with them properly
+      fxWithExposedErrors = exposeErr fxInEnv'
+      -- Apply the transformation in env' context
+      Fx transformedReader = transform fxWithExposedErrors
+   in -- Run the transformed computation in env' and map errors back
+      mapExceptT (fmap (first errMap)) (runReaderT transformedReader (FxEnv unmask crash env'))
         >>= either throwE return
 
 -- * Classes

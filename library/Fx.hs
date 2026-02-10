@@ -17,7 +17,7 @@ module Fx
     absorbErr,
 
     -- ** General handling
-    interlay,
+    subtransform,
 
     -- ** Concurrency
     concurrently,
