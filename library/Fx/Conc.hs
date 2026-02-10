@@ -33,16 +33,7 @@ instance Alternative (Conc env err) where
   (<|>) (Conc m1) (Conc m2) = Conc $ do
     future1 <- start m1
     future2 <- start m2
-    let Future tid1 _ = future1
-        Future tid2 _ = future2
-    -- Race the futures - the first to complete wins
-    result <- wait (future1 <|> future2)
-    -- Cancel the loser thread
-    -- Both threads get killed; the winner has already completed so killThread is a no-op
-    runTotalIO $ \_ -> do
-      void $ try @SomeException $ killThread tid1
-      void $ try @SomeException $ killThread tid2
-    return result
+    wait (future1 <|> future2)
 
 -- |
 -- Execute concurrent effects in either one or a combination of the following ways:
