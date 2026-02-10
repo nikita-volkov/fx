@@ -7,7 +7,7 @@ module Fx.Conc
   )
 where
 
-import Fx.Future (start, wait)
+import qualified Fx.Future as Future
 import Fx.Fx (Fx, RunsFx (..))
 import Fx.Prelude
 
@@ -21,19 +21,25 @@ deriving instance Bifunctor (Conc env)
 
 instance Applicative (Conc env err) where
   pure = Conc . pure
-  (<*>) (Conc m1) (Conc m2) = Conc $ do
-    future1 <- start m1
+  (<*>) (Conc m1) (Conc m2) = Conc do
+    future1 <- Future.async m1
     res2 <- m2
-    res1 <- wait future1
+    res1 <- Future.await future1
     return (res1 res2)
 
 instance Alternative (Conc env err) where
   empty = Conc do
-    wait empty
-  (<|>) (Conc m1) (Conc m2) = Conc $ do
-    future1 <- start m1
-    future2 <- start m2
-    wait (future1 <|> future2)
+    Future.await empty
+  (<|>) (Conc m1) (Conc m2) = Conc do
+    future1 <- Future.async m1
+    future2 <- Future.async m2
+    -- Race the futures - the first to complete wins
+    result <- Future.await (future1 <|> future2)
+    -- Cancel the loser thread
+    -- Both threads get killed; the winner has already completed so killThread is a no-op
+    Future.cancel future1
+    Future.cancel future2
+    return result
 
 -- |
 -- Execute concurrent effects in either one or a combination of the following ways:
