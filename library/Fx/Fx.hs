@@ -237,26 +237,30 @@ mapEnv fn (Fx m) =
 -- * Converting between error types while transforming the effect
 -- * Applying middleware-like transformations (logging, retries, etc.) in a different context
 subtransform ::
-  -- | Environment mapping function. Contravariant: maps from the outer to inner environment.
+  -- | Subenvironment getter.
   (env -> env') ->
-  -- | Error mapping function. Covariant: maps from the inner to outer error.
+  -- | Subenvironment setter.
+  (env' -> env -> env) ->
+  -- | Suberror packer.
   (err' -> err) ->
   -- | Transformation to apply to the effect in the new context.
   (forall res'. Fx env' err' res' -> Fx env' err' res') ->
   (Fx env err res -> Fx env err res)
-subtransform envMap errMap transform fx = Fx $ ReaderT $ \(FxEnv unmask crash env) ->
-  let env' = envMap env
-      -- Adapt fx to run in env' environment
-      fxInEnv' = Fx $ ReaderT $ \(FxEnv _ _ _) ->
-        let Fx m = fx
-         in runReaderT m (FxEnv unmask crash env)
-      -- Expose errors so the transform can work with them properly
-      fxWithExposedErrors = exposeErr fxInEnv'
-      -- Apply the transformation in env' context
-      Fx transformedReader = transform fxWithExposedErrors
-   in -- Run the transformed computation in env' and map errors back
-      mapExceptT (fmap (first errMap)) (runReaderT transformedReader (FxEnv unmask crash env'))
-        >>= either throwE return
+subtransform envMap envSet errMap transform fx =
+  Fx $ ReaderT $ \(FxEnv unmask crash env) ->
+    let env' =
+          envMap env
+        fx' =
+          Fx $ ReaderT $ \(FxEnv _ _ env') ->
+            ExceptT $
+              let Fx m = fx
+                  fxEnv = FxEnv unmask crash (envSet env' env)
+               in fmap Right (runExceptT (runReaderT m fxEnv))
+        Fx transformedReader =
+          transform fx'
+     in -- Run the transformed computation in env' and map errors back
+        mapExceptT (fmap (first errMap)) (runReaderT transformedReader (FxEnv unmask crash env'))
+          >>= either throwE return
 
 -- * Classes
 
