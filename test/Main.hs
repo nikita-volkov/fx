@@ -25,18 +25,22 @@ main = hspec do
     -- Test that racing returns the first result
     let slowAction = do
           -- Wrap in exception handler to catch ThreadKilled
-          runTotalIO $ \_ -> catch
-            (threadDelay 1000000) -- 1 second
-            (\ThreadKilled -> return ()) -- Ignore ThreadKilled
+          runTotalIO $ \_ ->
+            catch
+              (threadDelay 1000000) -- 1 second
+              ( \case
+                  ThreadKilled -> return () -- Just return on kill, we will check the kill in the test
+                  exc -> throwIO exc
+              )
           return (1 :: Int)
-    
+
     let fastAction = do
           return (2 :: Int)
-    
+
     -- Race them using concurrently
     result <- runFx $ concurrently $ \lift ->
       lift slowAction <|> lift fastAction
-    
+
     -- The fast action should win
     result `shouldBe` 2
 
@@ -44,33 +48,36 @@ main = hspec do
     -- Test that the losing thread is actually killed
     completedRef <- newIORef False
     killedRef <- newIORef False
-    
+
     let slowAction = do
           -- This will be killed before it completes
           runTotalIO $ \_ -> do
             -- Use catch to detect if thread is killed
             catch
               (threadDelay 5000000 >> writeIORef completedRef True) -- 5 seconds
-              (\ThreadKilled -> writeIORef killedRef True)
+              ( \case
+                  ThreadKilled -> writeIORef killedRef True
+                  _ -> pure ()
+              )
           return (1 :: Int)
-    
+
     let fastAction = do
           return (2 :: Int)
-    
+
     -- Race them using concurrently
     result <- runFx $ concurrently $ \lift ->
       lift slowAction <|> lift fastAction
-    
+
     -- The fast action should win
     result `shouldBe` 2
-    
+
     -- Give a moment for the kill signal to be processed
     threadDelay 100000 -- 100ms
-    
+
     -- The slow action should NOT have completed normally
     completed <- readIORef completedRef
     completed `shouldBe` False
-    
+
     -- The slow action should have been killed
     killed <- readIORef killedRef
     killed `shouldBe` True
