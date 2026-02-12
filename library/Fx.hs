@@ -16,9 +16,6 @@ module Fx
     exposeErr,
     absorbErr,
 
-    -- ** General handling
-    subtransform,
-
     -- ** Concurrency
     concurrently,
 

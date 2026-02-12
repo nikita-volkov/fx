@@ -12,7 +12,6 @@ module Fx.Fx
 
     -- ** Environment handling
     mapEnv,
-    subtransform,
 
     -- ** Error handling
     throwErr,
@@ -227,40 +226,6 @@ mapEnv fn (Fx m) =
     ReaderT $
       \(FxEnv unmask crash env) ->
         runReaderT m (FxEnv unmask crash (fn env))
-
--- |
--- Transform an effect by changing its environment and error context, then applying a transformation.
---
--- This is useful for:
---
--- * Running effects with different environments (e.g., focusing on a sub-environment)
--- * Converting between error types while transforming the effect
--- * Applying middleware-like transformations (logging, retries, etc.) in a different context
-subtransform ::
-  -- | Subenvironment getter.
-  (env -> env') ->
-  -- | Subenvironment setter.
-  (env' -> env -> env) ->
-  -- | Suberror packer.
-  (err' -> err) ->
-  -- | Transformation to apply to the effect in the new context.
-  (forall res'. Fx env' err' res' -> Fx env' err' res') ->
-  (Fx env err res -> Fx env err res)
-subtransform envMap envSet errMap transform fx =
-  Fx $ ReaderT $ \(FxEnv unmask crash env) ->
-    let env' =
-          envMap env
-        fx' =
-          Fx $ ReaderT $ \(FxEnv _ _ env') ->
-            ExceptT $
-              let Fx m = fx
-                  fxEnv = FxEnv unmask crash (envSet env' env)
-               in fmap Right (runExceptT (runReaderT m fxEnv))
-        Fx transformedReader =
-          transform fx'
-     in -- Run the transformed computation in env' and map errors back
-        mapExceptT (fmap (first errMap)) (runReaderT transformedReader (FxEnv unmask crash env'))
-          >>= either throwE return
 
 -- * Classes
 
