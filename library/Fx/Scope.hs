@@ -5,11 +5,12 @@ module Fx.Scope
     Scope (..),
     acquire,
     releasing,
+    registerRelease,
     scoping,
   )
 where
 
-import Fx.Fx (Fx (..), FxEnv (..), RunsFx (..))
+import Fx.Fx
 import Fx.Prelude
 
 -- |
@@ -61,6 +62,12 @@ releasing :: Fx env err () -> Scope err env -> Scope err env
 releasing release (Scope m) = Scope $ do
   (env, existingRelease) <- m
   return (env, existingRelease >> closeEnv env release)
+
+-- |
+-- Schedule an action to be run after the scope is exited.
+registerRelease :: Fx () err () -> Scope err ()
+registerRelease release =
+  Scope $ pure ((), release)
 
 -- |
 -- Execute Fx in the scope of a provided environment.

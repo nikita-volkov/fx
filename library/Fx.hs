@@ -35,7 +35,7 @@ module Fx
     -- * Scope
     Scope,
     acquire,
-    releasing,
+    registerRelease,
 
     -- * Exceptions
     FxException (..),
