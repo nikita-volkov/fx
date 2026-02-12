@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Fx
   ( -- * Fx
     Fx,
@@ -45,4 +47,11 @@ where
 
 import Fx.Conc
 import Fx.Fx
+import Fx.Prelude
 import Fx.Scope
+
+-- TODO: Move to the Fx module.
+instance MonadParallel (Fx env err) where
+  bindM2 f l r =
+    join $ concurrently $ \lift ->
+      liftA2 f (lift l) (lift r)

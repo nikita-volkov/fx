@@ -98,6 +98,7 @@ library
 
   build-depends:
     base >=4.9 && <5,
+    monad-parallel >=0.8 && <0.9,
     mtl >=2.2 && <3,
     stm >=2.5 && <3,
     text >=1 && <3,
