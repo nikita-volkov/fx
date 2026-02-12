@@ -27,6 +27,15 @@ instance Applicative (Scope err) where
     Scope $
       liftA2 (\(env1, release1) (env2, release2) -> (env1 env2, release2 *> release1)) m1 m2
 
+instance Monad (Scope err) where
+  return = pure
+  Scope m >>= f =
+    Scope do
+      (env, release) <- m
+      let Scope m2 = f env
+      (env2, release2) <- m2
+      return (env2, release2 *> release)
+
 instance Bifunctor Scope where
   bimap lf rf (Scope m) = Scope (bimap lf (bimap rf (first lf)) m)
   second = fmap
