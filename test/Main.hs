@@ -9,7 +9,7 @@ main = hspec do
   it "Error call on main thread" do
     res <- try $ runFx $ error "A"
     case res of
-      Left (FxException _ (ErrorCallFxExceptionReason _)) -> return ()
+      Left (FxException _ (ErrorCallFxExceptionReason _) _) -> return ()
       Left exc -> expectationFailure (show exc)
       _ -> expectationFailure "Right"
 
@@ -17,7 +17,7 @@ main = hspec do
     testException
       (fail "A")
       ( \case
-          FxException _ (ErrorCallFxExceptionReason _) -> True
+          FxException _ (ErrorCallFxExceptionReason _) _ -> True
           _ -> False
       )
 

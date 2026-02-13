@@ -11,6 +11,7 @@ where
 import Fx.Fx
 import Fx.Prelude
 import qualified Fx.Strings as Strings
+import GHC.Stack (callStack)
 
 -- |
 -- Handle to a result of an action which may still be being executed on another thread.
@@ -70,7 +71,7 @@ async (Fx m) =
     tid <- forkIO $ handle handler do
       tid <- myThreadId
 
-      let childCrash tids dls = crash (tid : tids) dls
+      let childCrash stack tids dls = crash stack (tid : tids) dls
 
       finalize <-
         catch
@@ -81,9 +82,9 @@ async (Fx m) =
           ( \exc -> return $ do
               case fromException exc of
                 -- Catch calls to `error`.
-                Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
+                Just errorCall -> crash callStack [] (ErrorCallFxExceptionReason errorCall)
                 -- Catch anything else we could miss. Just in case.
-                _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
+                _ -> crash callStack [] (BugFxExceptionReason (Strings.unexpectedException exc))
               atomically (putTMVar futureVar (Left Nothing))
           )
 
@@ -107,7 +108,7 @@ await (Future _ m) =
                 Left Nothing -> fail "Waiting for a future that crashed"
           )
           ( \(exc :: SomeException) -> return $ do
-              crash [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
+              crash callStack [] (BugFxExceptionReason (Strings.failedWaitingForResult exc))
               fail "Thread crashed with uncaught exception waiting for result."
           )
 

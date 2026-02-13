@@ -29,7 +29,7 @@ where
 
 import Fx.Prelude
 import qualified Fx.Strings as Strings
-import GHC.Stack (HasCallStack)
+import GHC.Stack (CallStack, HasCallStack, callStack, prettyCallStack)
 
 -- * Helper types and instances
 
@@ -40,13 +40,13 @@ data FxEnv env
       -- | Unmasking function.
       (forall a. IO a -> IO a)
       -- | Crash.
-      ([ThreadId] -> FxExceptionReason -> IO ())
+      (CallStack -> [ThreadId] -> FxExceptionReason -> IO ())
       -- | User environment.
       env
 
 -- |
 -- Fatal failure of an `Fx` application.
-data FxException = FxException [ThreadId] FxExceptionReason
+data FxException = FxException [ThreadId] FxExceptionReason CallStack
 
 -- |
 -- Reason of a fatal failure of an `Fx` application.
@@ -56,7 +56,8 @@ data FxExceptionReason
   | BugFxExceptionReason String
 
 instance Show FxException where
-  show (FxException tids reason) = Strings.fatalErrorAtThreadPath tids (show reason)
+  show (FxException tids reason stack) =
+    Strings.fatalErrorAtThreadPath tids (show reason) ++ "\n\nCallStack (from origin of error):\n" ++ prettyCallStack stack
 
 instance Exception FxException
 
@@ -88,7 +89,7 @@ instance MonadFail (Fx env err) where
   fail msg = Fx $
     ReaderT $
       \(FxEnv _ crash _) -> liftIO $ do
-        crash [] (ErrorCallFxExceptionReason (ErrorCall msg))
+        crash callStack [] (ErrorCallFxExceptionReason (ErrorCall msg))
         fail "Crashed"
 
 instance MonadIO (Fx env SomeException) where
@@ -131,7 +132,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
     tid <- myThreadId
 
     finalize <-
-      let crash tids reason = atomically (writeTQueue fatalErrChan (FxException (tid : tids) reason))
+      let crash stack tids reason = atomically (writeTQueue fatalErrChan (FxException (tid : tids) reason stack))
           fxEnv = FxEnv unmask crash ()
        in catch
             ( do
@@ -142,15 +143,15 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
                     catch
                       ( do
                           _ <- evaluate a
-                          crash [] (BugFxExceptionReason "Unexpected void")
+                          crash callStack [] (BugFxExceptionReason "Unexpected void")
                       )
-                      (crash [] . ErrorCallFxExceptionReason)
+                      (\errorCall -> crash callStack [] (ErrorCallFxExceptionReason errorCall))
             )
             ( \exc -> return $ case fromException exc of
                 -- Catch calls to `error`.
-                Just errorCall -> crash [] (ErrorCallFxExceptionReason errorCall)
+                Just errorCall -> crash callStack [] (ErrorCallFxExceptionReason errorCall)
                 -- Catch anything else we could miss. Just in case.
-                _ -> crash [] (BugFxExceptionReason (Strings.unexpectedException exc))
+                _ -> crash callStack [] (BugFxExceptionReason (Strings.unexpectedException exc))
             )
 
     -- Throw errors or post the result
@@ -173,7 +174,7 @@ runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
       ( \(exc :: SomeException) ->
           case fromException exc of
             Just (exc :: AsyncException) -> throwIO exc
-            _ -> throwIO (FxException [] (BugFxExceptionReason (Strings.failedWaitingForFinalResult exc)))
+            _ -> throwIO (FxException [] (BugFxExceptionReason (Strings.failedWaitingForFinalResult exc)) callStack)
       )
 
 -- |
@@ -189,7 +190,7 @@ runTotalIO io = Fx $
         catch
           (unmask (io env))
           ( \(exc :: SomeException) -> do
-              crash [] (UncaughtExceptionFxExceptionReason exc)
+              crash callStack [] (UncaughtExceptionFxExceptionReason exc)
               fail "Unhandled exception in runTotalIO. Got propagated to top."
           )
 
@@ -215,7 +216,7 @@ runExceptionalIO io =
           \exc -> case fromException exc of
             Just exc' -> return (Left exc')
             Nothing -> do
-              crash [] (UncaughtExceptionFxExceptionReason exc)
+              crash callStack [] (UncaughtExceptionFxExceptionReason exc)
               fail "Unhandled exception in runExceptionalIO. Got propagated to top."
 
 -- |
@@ -246,19 +247,15 @@ class RunsFx env err m | m -> env, m -> err where
 -- |
 -- Executes an effect with no environment and all errors handled.
 instance RunsFx () Void IO where
-  runFx :: (HasCallStack) => Fx () Void res -> IO res
   runFx = runFxInIO
 
 instance RunsFx () err (ExceptT err IO) where
-  runFx :: (HasCallStack) => Fx () err res -> ExceptT err IO res
   runFx fx = ExceptT (runFx (exposeErr fx))
 
 instance RunsFx env err (ReaderT env (ExceptT err IO)) where
-  runFx :: (HasCallStack) => Fx env err res -> ReaderT env (ExceptT err IO) res
   runFx fx = ReaderT (\env -> ExceptT (runFx (mapEnv (const env) (exposeErr fx))))
 
 instance RunsFx env err (Fx env err) where
-  runFx :: (HasCallStack) => Fx env err res -> Fx env err res
   runFx = id
 
 -- ** Error Handling
