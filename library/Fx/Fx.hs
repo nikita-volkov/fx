@@ -29,6 +29,7 @@ where
 
 import Fx.Prelude
 import qualified Fx.Strings as Strings
+import GHC.Stack (HasCallStack)
 
 -- * Helper types and instances
 
@@ -121,7 +122,7 @@ mapTransformers fn (Fx m) = Fx (fn m)
 -- Execute an effect with no environment and all errors handled.
 --
 -- Conventionally, this is what should be placed in the @main@ function.
-runFxInIO :: Fx () Void res -> IO res
+runFxInIO :: (HasCallStack) => Fx () Void res -> IO res
 runFxInIO (Fx m) = uninterruptibleMask $ \unmask -> do
   fatalErrChan <- newTQueueIO
   resVar <- newEmptyTMVarIO
@@ -245,15 +246,19 @@ class RunsFx env err m | m -> env, m -> err where
 -- |
 -- Executes an effect with no environment and all errors handled.
 instance RunsFx () Void IO where
+  runFx :: (HasCallStack) => Fx () Void res -> IO res
   runFx = runFxInIO
 
 instance RunsFx () err (ExceptT err IO) where
+  runFx :: (HasCallStack) => Fx () err res -> ExceptT err IO res
   runFx fx = ExceptT (runFx (exposeErr fx))
 
 instance RunsFx env err (ReaderT env (ExceptT err IO)) where
+  runFx :: (HasCallStack) => Fx env err res -> ReaderT env (ExceptT err IO) res
   runFx fx = ReaderT (\env -> ExceptT (runFx (mapEnv (const env) (exposeErr fx))))
 
 instance RunsFx env err (Fx env err) where
+  runFx :: (HasCallStack) => Fx env err res -> Fx env err res
   runFx = id
 
 -- ** Error Handling
