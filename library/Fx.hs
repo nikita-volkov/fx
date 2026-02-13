@@ -5,6 +5,7 @@ module Fx
     Fx,
 
     -- ** Execution
+    runFxInIO,
     RunsFx (..),
 
     -- ** Environment handling
