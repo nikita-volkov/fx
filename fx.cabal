@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name: fx
-version: 0.5
+version: 0.10
 synopsis: Modular effectful computations with explicit environments and errors
 description:
   A lightweight library for writing effectful computations with explicit
