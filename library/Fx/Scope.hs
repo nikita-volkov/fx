@@ -41,6 +41,14 @@ instance Bifunctor Scope where
   bimap lf rf (Scope m) = Scope (bimap lf (bimap rf (first lf)) m)
   second = fmap
 
+instance MonadError err (Scope err) where
+  throwError err = Scope (throwError err)
+  catchError (Scope m) handler =
+    Scope $
+      catchError m $ \err ->
+        let Scope m2 = handler err
+         in m2
+
 -- |
 -- Create a resource provider from an acquiring effect.
 --
