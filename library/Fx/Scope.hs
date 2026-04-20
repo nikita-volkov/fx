@@ -14,7 +14,7 @@ import Fx.Fx
 import Fx.Prelude
 
 -- |
--- Instructions of how to acquire and release a resource of type `env` and which may fail with `err`.
+-- Instructions of how to acquire and release a resource of type `env` which may fail with `err`.
 newtype Scope err env = Scope (Fx () err (env, Fx () err ()))
 
 instance Functor (Scope err) where
@@ -50,9 +50,17 @@ instance MonadError err (Scope err) where
          in m2
 
 -- |
--- Create a resource provider from an acquiring effect.
+-- Create a scope from an acquiring effect.
 --
--- To add a release action, use 'releasing'.
+-- To add a release action, use 'registerRelease'.
+--
+-- Example:
+--
+-- > fileInWriteMode :: FilePath -> Scope IOError Handle
+-- > fileInWriteMode path = do
+-- >   handle <- acquire (openFile path WriteMode)
+-- >   registerRelease (hClose handle)
+-- >   return handle
 acquire :: Fx () err env -> Scope err env
 acquire acquireFx = Scope do
   env <- acquireFx
