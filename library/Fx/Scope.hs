@@ -49,6 +49,9 @@ instance MonadError err (Scope err) where
         let Scope m2 = handler err
          in m2
 
+instance MonadIO (Scope SomeException) where
+  liftIO io = Scope (liftIO io >>= \env -> return (env, pure ()))
+
 -- |
 -- Create a scope from an acquiring effect.
 --
