@@ -1,8 +1,8 @@
 module Main where
 
 import Fx
-import Test.Hspec
 import Prelude hiding (choose)
+import Test.Hspec
 
 main :: IO ()
 main = hspec do
@@ -47,22 +47,22 @@ main = hspec do
   it "Racing kills the losing thread" do
     -- Test that the losing thread is actually killed
     completedRef <- newIORef False
-    killedRef <- newIORef False
+    started <- newEmptyMVar
+    killed <- newEmptyMVar
 
     let slowAction = do
           -- This will be killed before it completes
           runTotalIO $ \_ -> do
-            -- Use catch to detect if thread is killed
             catch
-              (threadDelay 5000000 >> writeIORef completedRef True) -- 5 seconds
+              (putMVar started () >> threadDelay 5000000 >> writeIORef completedRef True)
               ( \case
-                  ThreadKilled -> writeIORef killedRef True
-                  _ -> pure ()
+                  ThreadKilled -> putMVar killed ()
+                  exc -> throwIO exc
               )
           return (1 :: Int)
 
     let fastAction = do
-          return (2 :: Int)
+          runTotalIO $ \_ -> readMVar started >> return (2 :: Int)
 
     -- Race them using concurrently
     result <- runFx $ concurrently $ \lift ->
@@ -71,16 +71,12 @@ main = hspec do
     -- The fast action should win
     result `shouldBe` 2
 
-    -- Give a moment for the kill signal to be processed
-    threadDelay 100000 -- 100ms
+    killedByTimeout <- timeout 1000000 (takeMVar killed)
+    killedByTimeout `shouldBe` Just ()
 
     -- The slow action should NOT have completed normally
     completed <- readIORef completedRef
     completed `shouldBe` False
-
-    -- The slow action should have been killed
-    killed <- readIORef killedRef
-    killed `shouldBe` True
 
 testException :: Fx () Void a -> (FxException -> Bool) -> IO ()
 testException fx validateExc = do
